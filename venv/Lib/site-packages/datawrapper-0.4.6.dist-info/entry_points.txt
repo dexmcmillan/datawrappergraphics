@@ -1,0 +1,3 @@
+[console_scripts]
+datawrapper=datawrapper.__main__:app
+

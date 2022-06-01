@@ -1,0 +1,13 @@
+README.md
+setup.py
+datawrappergraphics/Chart.py
+datawrappergraphics/DatawrapperGraphic.py
+datawrappergraphics/Map.py
+datawrappergraphics/StormMap.py
+datawrappergraphics/__init__.py
+datawrappergraphics/icons.py
+datawrappergraphics.egg-info/PKG-INFO
+datawrappergraphics.egg-info/SOURCES.txt
+datawrappergraphics.egg-info/dependency_links.txt
+datawrappergraphics.egg-info/requires.txt
+datawrappergraphics.egg-info/top_level.txt

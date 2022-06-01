@@ -1,0 +1,50 @@
+{
+    "id": "",
+    "wikidata": null,
+    "type": "point",
+    "title": "",
+    "icon": {"id": "attention",
+        "path": "M957-24q10-16 0-34-10-16-30-16l-892 0q-18 0-28 16-13 18-2 34l446 782q8 18 30 18t30-18z m-420 50l0 100-110 0 0-100 110 0z m0 174l0 300-110 0 0-300 110 0z",
+        "horiz-adv-x": 962,
+        "height": 702,"width": 961.3333333333333
+    },
+    "scale": 1.2,
+    "textPosition": null,
+    "markerColor": "#C42127",
+    "markerSymbol": "",
+    "markerTextColor": "#333333",
+    "anchor": "middle-left",
+    "offsetY": 0,
+    "offsetX": 0,
+    "labelStyle": "plain",
+    "text": {
+        "bold": false,
+        "color": "#333333",
+        "fontSize": 14,
+        "halo": "#f2f3f0",
+        "italic": false,
+        "space": false,
+        "uppercase": false
+    },
+    "class": "",
+    "rotate": 0,
+    "visible": true,
+    "locked": false,
+    "preset": "-",
+    "visibility": {
+        "mobile": true,
+        "desktop": true
+    },
+    "tooltip": {
+        "text": ""
+    },
+    "connectorLine": {
+        "enabled": false,
+        "arrowHead": "lines",
+        "type": "curveRight",
+        "targetPadding": 3,
+        "stroke": 1,
+        "lineLength": 0
+    },
+    "coordinates": []
+}
