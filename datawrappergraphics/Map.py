@@ -21,8 +21,6 @@ class Map(DatawrapperGraphic):
     def __init__(self, chart_id: str = None, copy_id: str = None, auth_token = None):
         super().__init__(chart_id, copy_id, auth_token)
         
-        self.script_name = os.path.basename(sys.argv[0]).replace(".py", "").replace("script-", "")
-        
         self.icon_list = dw_icons
         
      
@@ -75,8 +73,6 @@ class Map(DatawrapperGraphic):
         # Define a list of icon types that are allowed (ie those that are defined in the icons.py file.)
         allowed_icon_list = [key for key, value in self.icon_list.items()]
         
-        print(allowed_icon_list)
-        
         # Create an id column that uses Datawrapper's ID naming convention.
         input_data.loc[:, 'id'] = range(0, len(input_data))
         input_data.loc[:, "id"] = input_data.loc[:, 'id'].apply(lambda x: f"m{x}")
@@ -124,16 +120,16 @@ class Map(DatawrapperGraphic):
                 raise Exception(f"It looks like you haven't provided a valid icon type. Please ensure the value is one of: {', '.join(allowed_icon_list)}.")
             
             # Load the template feature object depending on the type of each marker (area or point). Throw an error if the file can't be found.
-            path = os.path.dirname(__file__)
             
-            with open(f"{path}/assets/{marker_type}.json", 'r') as f:
+            
+            with open(f"{self.path}/assets/{marker_type}.json", 'r') as f:
                 template = json.load(f)
             
             # These properties have to be handled a little differently than just loop through and replace the values in the template with the new values provided.
             exclusion_list = ["tooltip", "icon", "geometry", "fill", "stroke", "visibility"]
 
             # This code loops through every value provided and replaces that value in the template we loaded above. If the value is not a str or an int, it won't include it.
-            new_feature = {k: feature["properties"][k] if (k in feature["properties"] and k not in exclusion_list and isinstance(v, Union[int, str])) else v for k, v in template.items()}
+            new_feature = {k: feature["properties"][k] if (k in feature["properties"] and k not in exclusion_list and isinstance(v, Union[int, str, float])) else v for k, v in template.items()}
             
             # Now we handle some of the outliers specified in the exclusion list.
             # Tooltip has to be embedded in an object.
@@ -194,10 +190,10 @@ class Map(DatawrapperGraphic):
         
         # If there are other shapes to be added (ie. highlights of provinces, etc.) then this will use a naming convention to grab them from the shapes folder.
         # Check if there are any extra shapes to add.
-        if os.path.exists(f"assets/shapes/shapes-{self.script_name}.json"):
+        if os.path.exists(f"{self.path}/assets/shapes/shapes-{self.script_name}.json"):
             
             # Open the shape file.
-            with open(f"assets/shapes/shapes-{self.script_name}.json", 'r') as f:
+            with open(f"{self.path}/assets/shapes/shapes-{self.script_name}.json", 'r') as f:
                 extra_shapes = json.load(f)
                 
                 # If there is only one object and it's not in a list, make it a list.
@@ -242,12 +238,11 @@ class Map(DatawrapperGraphic):
             "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
             }
         
-        print(self.CHART_ID)
         response = requests.get(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers)
         markers = response.json()["markers"]
-        
+        print(self.path)
         if save:
-            with open(f"markers-{self.script_name}.json", 'w') as f:
+            with open(f"{self.path}/markers-{self.script_name}.json", 'w') as f:
                 json.dump(markers, f)
                 
         return markers

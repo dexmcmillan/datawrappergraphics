@@ -2,6 +2,7 @@ import requests
 import json
 import os
 import datetime
+import sys
 
 # This is the parent class for all datawrapper graphics.
 # It is extended by all other classes in this module.
@@ -30,6 +31,12 @@ class DatawrapperGraphic:
     # Token to authenticate to Datawrapper's API.
     global DW_AUTH_TOKEN
     
+    # Path that the script is running from using this module.
+    global path
+    
+    # Name of the script currently running using this module.
+    global script_name
+    
     # There are two opens when creating a new DatawrapperGraphic object:
     # 
     #   1. You can create a brand new chart by specifying no chart_id and no copy_id. This is not recommended but can be used to create a large number of charts en-mass,
@@ -44,6 +51,10 @@ class DatawrapperGraphic:
         
         # Set OS name (see global DatawrapperGraphic variables)
         self.os_name = os.name
+        
+        self.script_name = os.path.basename(sys.argv[0]).replace(".py", "").replace("script-", "")
+        
+        self.path = os.path.dirname(sys.argv[0]) 
         
         self.auth(token=auth_token)
         
@@ -252,7 +263,6 @@ class DatawrapperGraphic:
     
     
     # This method authenticates to Datawrapper and returns the token for accessing the DW api.
-    
     def auth(self, token: str = None):
         
         if token != None:

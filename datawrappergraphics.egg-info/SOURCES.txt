@@ -11,3 +11,8 @@ datawrappergraphics.egg-info/SOURCES.txt
 datawrappergraphics.egg-info/dependency_links.txt
 datawrappergraphics.egg-info/requires.txt
 datawrappergraphics.egg-info/top_level.txt
+datawrappergraphics/assets/__init__.py
+datawrappergraphics/assets/area.json
+datawrappergraphics/assets/point.json
+tests/__init__.py
+tests/test_datawrappergraphics.py
