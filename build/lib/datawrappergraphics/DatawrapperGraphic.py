@@ -27,6 +27,9 @@ class DatawrapperGraphic:
     # What OS is the script running on? This effects timestamping as unix uses UTC.
     global os_name
     
+    # Token to authenticate to Datawrapper's API.
+    global DW_AUTH_TOKEN
+    
     # There are two opens when creating a new DatawrapperGraphic object:
     # 
     #   1. You can create a brand new chart by specifying no chart_id and no copy_id. This is not recommended but can be used to create a large number of charts en-mass,
@@ -37,16 +40,18 @@ class DatawrapperGraphic:
     #   3. You can specify a chart that is already made that you want to update. This is the easiest way - copy another chart in the Datawrapper app and then
     #   use that chart_id.
     
-    def __init__(self, chart_id: str = None, copy_id: str = None):
+    def __init__(self, chart_id: str = None, copy_id: str = None, auth_token: str = None):
         
         # Set OS name (see global DatawrapperGraphic variables)
         self.os_name = os.name
+        
+        self.auth(token=auth_token)
         
         # Define common headers for all the below options for instantiating Datawrapper graphics.
         headers = {
                 "Accept": "*/*",
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.auth()}"
+                "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
             }
         
         # If no chart ID is passed, and no copy id is passed, we create a new chart from scratch.
@@ -84,6 +89,8 @@ class DatawrapperGraphic:
             raise Exception(f"Please specify either a chart_id or a copy_id, but not both.")
         
         response = requests.get(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers)
+        
+        
         self.metadata = response.json()
 
     
@@ -100,7 +107,7 @@ class DatawrapperGraphic:
         headers = {
             "Accept": "*/*",
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.auth()}"
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
         }
 
         r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=json.dumps(self.metadata))
@@ -119,7 +126,7 @@ class DatawrapperGraphic:
         headers = {
             "Accept": "*/*",
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.auth()}"
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
         }
         
         # Take the string input as a parameter and put it into a payload object. Then convert to JSON string.
@@ -145,7 +152,7 @@ class DatawrapperGraphic:
         
         headers = {
             "Accept": "*/*", 
-            "Authorization": f"Bearer {self.auth()}"
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
             }
         
         payload =  {
@@ -193,7 +200,7 @@ class DatawrapperGraphic:
         headers = {
             "Accept": "*/*",
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.auth()}"
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
         }
         
         # This is a template object for the structure of the patch payload that Datawrapper API accepts.
@@ -232,7 +239,7 @@ class DatawrapperGraphic:
 
         headers = {
             "Accept": "*/*", 
-            "Authorization": f"Bearer {self.auth()}"
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
             }
 
         r = requests.post(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/publish", headers=headers)
@@ -246,18 +253,22 @@ class DatawrapperGraphic:
     
     # This method authenticates to Datawrapper and returns the token for accessing the DW api.
     
-    def auth(self):
+    def auth(self, token: str = None):
         
-        # On a local machine, it will read the auth.txt file for the token.
-        try:
-            with open('./auth.txt', 'r') as f:
-                DW_AUTH_TOKEN = f.read().strip()
-        # If this is run using Github actions, it will take a secret from the repo instead.
-        except FileNotFoundError:
-            try: DW_AUTH_TOKEN = os.environ['DW_AUTH_TOKEN']
-            except: raise Exception(f"No auth.txt file found, and no environment variable specified for DW_AUTH_TOKEN. Please add one of the two to authenticate to Datawrapper's API.")
-            
-        return DW_AUTH_TOKEN 
+        if token != None:
+            DW_AUTH_TOKEN = token
+        else:
+            # On a local machine, it will read the auth.txt file for the token.
+            try:
+                with open('./auth.txt', 'r') as f:
+                    DW_AUTH_TOKEN = f.read().strip()
+            # If this is run using Github actions, it will take a secret from the repo instead.
+            except FileNotFoundError:
+                try: DW_AUTH_TOKEN = os.environ['DW_AUTH_TOKEN']
+                except: raise Exception(f"No auth.txt file found, and no environment variable specified for DW_AUTH_TOKEN. Please add one of the two to authenticate to Datawrapper's API.")
+        
+        self.DW_AUTH_TOKEN = DW_AUTH_TOKEN    
+        return self 
     
     
     

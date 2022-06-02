@@ -18,7 +18,7 @@ class Chart(DatawrapperGraphic):
         headers = {
             "Accept": "*/*",
             "Content-Type": "text/csv",
-            "Authorization": f"Bearer {self.auth()}"
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
         }
 
         payload = data.to_csv()

@@ -1,4 +1,12 @@
+wheel
+pipwin
+numpy
 pandas
-requests
-datawrapper
+shapely
+gdal
+fiona
+pyproj
+six
+rtree
 geopandas
+requests

@@ -1,8 +1,7 @@
 Metadata-Version: 2.1
 Name: datawrappergraphics
-Version: 0.2.11
+Version: 0.2.19
 Summary: A pythonic representation of Datawrapper graphics.
-Home-page: UNKNOWN
 Author: Dexter McMillan
 License: MIT
 Platform: UNKNOWN

@@ -1,6 +1,5 @@
-
-requests
-
+wheel
+pipwin
 numpy
 pandas
 shapely
@@ -10,3 +9,5 @@ pyproj
 six
 rtree
 geopandas
+
+requests
