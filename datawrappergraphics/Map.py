@@ -18,8 +18,8 @@ class Map(DatawrapperGraphic):
     
     
     
-    def __init__(self, chart_id: str = None, copy_id: str = None):
-        super().__init__(chart_id, copy_id)
+    def __init__(self, chart_id: str = None, copy_id: str = None, auth_token = None):
+        super().__init__(chart_id, copy_id, auth_token)
         
         self.script_name = os.path.basename(sys.argv[0]).replace(".py", "").replace("script-", "")
         
@@ -72,9 +72,10 @@ class Map(DatawrapperGraphic):
         # Define a list of marker types that are allowed.
         allowed_marker_type_list = ["point", "area"]
         
-        # Define a list of icon types that are allowed
-        # TODO write code to pull this list programmatically when a new template is added to assets folder.
-        allowed_icon_list = ["fire", "attention", "circle-sm", "circle", "city", "droplet", "fire", "star-2", "area"]
+        # Define a list of icon types that are allowed (ie those that are defined in the icons.py file.)
+        allowed_icon_list = [key for key, value in self.icon_list.items()]
+        
+        print(allowed_icon_list)
         
         # Create an id column that uses Datawrapper's ID naming convention.
         input_data.loc[:, 'id'] = range(0, len(input_data))
@@ -96,24 +97,36 @@ class Map(DatawrapperGraphic):
         
         for feature in features:
             
-            # Check properties that are required to be able to run this function and raise an error if they are not provided.
-            
-            try: icon = feature["properties"]['icon']
-            except KeyError: raise Exception(f"Icon was not specified in your file. Please add a column for this property.")
-            
-            # Check to make sure the icon type we specified is in the list of allowed marker types.
-            if icon not in allowed_icon_list:
-                raise Exception(f"It looks like you haven't provided a valid icon type. Please ensure the value is one of: {', '.join(allowed_icon_list)}.")
-            
+            # Check if a marker type is specified. If it's not, we'll try to infer the type based on the presence of lat/lng columns or geometry columns (area columns have geometry
+            # point columns have lat/lng.
             try: marker_type = feature["properties"]["type"]
-            except KeyError: raise Exception(f"Marker type was not specified in your file. Please add a column for this property.")
+            except KeyError:
+                try:
+                    if feature["properties"]["latitude"] and feature["properties"]["longitude"]:
+                        marker_type = "point"
+                    elif feature["geometry"]:
+                        marker_type = "area"
+                except KeyError: raise Exception(f"Marker type was not specified in your file, and there's no latitude/longitude or geometry column to infer marker type. Please add a column for these properties.")
             
             # Check to make sure the marker type we specified is in the list of allowed marker types.
             if marker_type not in allowed_marker_type_list:
                 raise Exception(f"It looks like you haven't provided a valid marker type. Please ensure the value is one of: {', '.join(allowed_marker_type_list)}.")
             
+            # Check to see if an icon has been specified. If not, default to 'circle'.
+            try: icon = feature["properties"]['icon']
+            except KeyError:
+                if marker_type == "point":
+                    feature["properties"]["icon"] = "circle"
+                    icon = "circle"
+            
+            # Check to make sure the icon type we specified is in the list of allowed marker types.
+            if icon not in allowed_icon_list:
+                raise Exception(f"It looks like you haven't provided a valid icon type. Please ensure the value is one of: {', '.join(allowed_icon_list)}.")
+            
             # Load the template feature object depending on the type of each marker (area or point). Throw an error if the file can't be found.
-            with open(f"assets/{marker_type}.json", 'r') as f:
+            path = os.path.dirname(__file__)
+            
+            with open(f"{path}/assets/{marker_type}.json", 'r') as f:
                 template = json.load(f)
             
             # These properties have to be handled a little differently than just loop through and replace the values in the template with the new values provided.
@@ -125,7 +138,7 @@ class Map(DatawrapperGraphic):
             # Now we handle some of the outliers specified in the exclusion list.
             # Tooltip has to be embedded in an object.
             try: new_feature["tooltip"] = {"text": feature["properties"]["tooltip"]}
-            except: new_feature["tooltip"] = {"text": template["tooltip"]}
+            except: new_feature["tooltip"] = template["tooltip"]
             
             # This pulls the "visibility" values from whatever is specified for "visible". This means that currently, you can not disable
             # anything from showing on mobile and desktop seperately.
@@ -204,7 +217,7 @@ class Map(DatawrapperGraphic):
         payload = json.dumps(payload)
         
         # Make the HTTP request to the Datawrapper API to upload the data.
-        headers = {"Authorization": f"Bearer {self.auth()}"}
+        headers = {"Authorization": f"Bearer {self.DW_AUTH_TOKEN}"}
         r = requests.put(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers, data=payload)
 
         if r.ok: print(f"SUCCESS: Data added to chart.")
@@ -226,7 +239,7 @@ class Map(DatawrapperGraphic):
         
         headers = {
             "Accept": "text/csv",
-            "Authorization": f"Bearer {self.auth()}"
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
             }
         
         print(self.CHART_ID)
