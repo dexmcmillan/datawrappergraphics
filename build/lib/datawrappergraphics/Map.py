@@ -122,7 +122,7 @@ class Map(DatawrapperGraphic):
             # Load the template feature object depending on the type of each marker (area or point). Throw an error if the file can't be found.
             
             
-            with open(f"{self.path}/assets/{marker_type}.json", 'r') as f:
+            with open(f"{os.path.dirname(__file__)}/assets/{marker_type}.json", 'r') as f:
                 template = json.load(f)
             
             # These properties have to be handled a little differently than just loop through and replace the values in the template with the new values provided.

@@ -6,7 +6,7 @@ setup(
     include_package_data = True,
     data_files=[('assets', ['./datawrappergraphics/assets/point.json']),
                 ('assets', ['./datawrappergraphics/assets/area.json'])],
-    version='0.2.29',
+    version='0.2.32',
     description='A pythonic representation of Datawrapper graphics.',
     author='Dexter McMillan',
     license='MIT',
