@@ -5,7 +5,7 @@ setup(
     packages=find_packages(include=["datawrappergraphics"]),
     include_package_data = True,
     package_data={'datawrappergraphics': ['assets/*.json']},
-    version='0.2.36',
+    version='0.2.37',
     description='A pythonic representation of Datawrapper graphics.',
     author='Dexter McMillan',
     license='MIT',
