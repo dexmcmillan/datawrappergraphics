@@ -2,6 +2,8 @@
 
 A pythonic representation of Datawrapper graphics that takes pandas Dataframes as input for charts and locator maps.
 
+[![GitHub issues](https://img.shields.io/github/issues/Naereen/StrapDown.js.svg)](https://github.com/dexmcmillan/datawrappergraphics/issues)
+
 ## Installation
 Install directly from the github repository.
 ```pip install https://github.com/dexmcmillan/datawrappergraphics/releases/download/v0.1.33/datawrappergraphics-0.2.32-py3-none-any.whl```
