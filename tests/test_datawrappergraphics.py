@@ -4,26 +4,45 @@ import os
 import geopandas
 import glob
 import re
+import numpy
 
 
 
-TEST_CHART_ID = "rCSft"
+TEST_MAP_ID = "rCSft"
+TEST_CHART_ID = "W67Od"
 API_TEST_FOLDER = "105625"
 
 
+test_map_data = pd.DataFrame({"title": ["Point 1"], "latitude": [50.2373819], "longitude": [-90.708556], "anchor": ["middle-right"], "tooltip": ["A test tooltip."], "icon": ["attention"]})
 
-def test_simple_map():
+test_chart_data = pd.DataFrame({"date": pd.date_range("2022-01-01", "2022-06-02")[:50], "value": numpy.random.randint(1, 20, 50)})
+
+def test_simple_chart():
     
-    data = pd.DataFrame({"title": ["Point 1"], "latitude": [50.2373819], "longitude": [-90.708556], "anchor": ["middle-right"], "tooltip": ["A test tooltip."], "icon": ["attention"]})
-    
-    assert (datawrappergraphics.Map(chart_id=TEST_CHART_ID)
-        .data(data)
-        .head(f"TEST: Testing datawrappergraphics library")
+    assert (datawrappergraphics.Chart(chart_id=TEST_CHART_ID)
+        .data(test_chart_data)
+        .head(f"TEST: Testing datawrappergraphics library's Chart class")
         .deck(f"A test deck.")
         .publish()
         .move(folder_id=API_TEST_FOLDER)
     )
 
+
+
+def test_simple_map():
+    
+    assert (datawrappergraphics.Map(chart_id=TEST_MAP_ID)
+        .data(test_map_data)
+        .head(f"TEST: Testing datawrappergraphics library")
+        .deck(f"A test deck.")
+        .move(folder_id=API_TEST_FOLDER)
+    )
+
+
+
+def test_export_chart():
+    
+    assert datawrappergraphics.Map(chart_id=TEST_MAP_ID).export()
 
 
 
@@ -163,8 +182,3 @@ def test_ukraine_map():
 # def test_delete():
     
 #     assert datawrappergraphics.Map(chart_id=TEST_CHART_ID).delete()
-
-    
-def test_export_chart():
-    
-    assert datawrappergraphics.Map(chart_id=TEST_CHART_ID).export()
