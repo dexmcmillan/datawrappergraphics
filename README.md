@@ -30,6 +30,10 @@ Your dataframe needs to have the following columns:
 
 **footer(data)**
 
+**move()**
+
+**export()**
+
 Classes can be implemented by using:
 
 ```

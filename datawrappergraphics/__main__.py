@@ -5,6 +5,7 @@ import sys
 import pandas as pd
 import geopandas
 import datetime
+import logging
 from typing import Union
 import pytz
 from io import BytesIO
@@ -126,6 +127,9 @@ class DatawrapperGraphic:
         else: raise Exception(f"Couldn't update metadata. Response: {r.reason}")
         
         return self
+    
+    
+    
     
     
     
@@ -261,6 +265,9 @@ class DatawrapperGraphic:
     
     
     
+    
+    
+    
     # This method authenticates to Datawrapper and returns the token for accessing the DW api.
     def auth(self, token: str = None):
         
@@ -279,8 +286,76 @@ class DatawrapperGraphic:
         self.DW_AUTH_TOKEN = DW_AUTH_TOKEN    
         return self 
     
+
     
     
+    
+    
+    # Moves your chart to a particular folder ID.
+    def move(self, folder_id: str):
+        
+        headers = {
+            "Accept": "*/*", 
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
+            }
+        
+        payload = {
+            "ids": [self.CHART_ID],
+            "patch": {"folderId": folder_id}
+            }
+
+        r = requests.patch(f"https://api.datawrapper.de/v3/charts", json=payload, headers=headers)
+        
+        if r.ok: print(f"SUCCESS: Chart moved to folder ID {folder_id}!")
+        else: raise Exception(f"ERROR: Chart couldn't be moved. Response: {r.reason}")
+        
+        return self
+    
+    
+    
+    
+    
+    
+    def delete(self):
+        
+        logging.warning(f"Deleting chart with ID {self.CHART_ID}!")
+        
+        headers = {
+            "Accept": "*/*", 
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
+            }
+
+        r = requests.delete(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers)
+        
+        if r.ok: print(f"SUCCESS: Chart published!")
+        else: raise Exception(f"ERROR: Chart couldn't be deleted. Response: {r.reason}")
+        
+        return self
+    
+    
+    
+    
+    def export(self, format: str = "png", filename: str = "export.png"):
+        
+        file_path = self.path + filename
+        
+        headers = {
+            "Accept": "image/png", 
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
+            }
+
+        export_chart_response = requests.get(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/export/{format}?unit=px&mode=rgb&plain=false&scale=1&zoom=2&download=true&fullVector=false&ligatures=true&transparent=false&logo=auto&dark=false", headers=headers)
+            
+        
+        if export_chart_response.ok:
+            print(f"SUCCESS: Chart with ID {self.CHART_ID} exported and saved!")
+            
+            with open(file_path, "wb") as response:
+                response.write(export_chart_response.content)
+                
+        else: raise Exception(f"ERROR: Chart couldn't be exported as {format}. Response: {export_chart_response.reason}")
+        
+        return self
 
 # The Chart class defines methods and variables for uploading data to datawrapper charts (scatter plots, tables etc).
 # Use this class to create a new, copy, or to manage a currently existing Datawrapper chart (ie. not a map!).

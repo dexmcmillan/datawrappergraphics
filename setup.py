@@ -29,4 +29,5 @@ setup(
         'pytest',
         'pytest-runner'],
     test_suite='tests',
+    filterwarnings='ignore::DeprecationWarning',
 )
