@@ -4,7 +4,7 @@ A pythonic representation of Datawrapper graphics that takes pandas Dataframes a
 
 [![GitHub issues](https://img.shields.io/github/issues/Naereen/StrapDown.js.svg)](https://github.com/dexmcmillan/datawrappergraphics/issues)
 
-[![GitHub release](https://img.shields.io/github/release/Naereen/StrapDown.js.svg)]([https://github.com/dexmcmillan/datawrappergraphics/tags](https://github.com/dexmcmillan/datawrappergraphics/releases/tag/v0.2.35))
+[![GitHub release](https://img.shields.io/github/release/Naereen/StrapDown.js.svg)](https://github.com/dexmcmillan/datawrappergraphics/tags)
 
 ## Installation
 Install directly from the github repository.
