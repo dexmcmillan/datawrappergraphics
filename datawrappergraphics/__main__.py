@@ -1,10 +1,10 @@
 import requests
 import json
 import os
-import datetime
 import sys
 import pandas as pd
 import geopandas
+import datetime
 from typing import Union
 import pytz
 from io import BytesIO
@@ -12,15 +12,16 @@ from zipfile import ZipFile
 from urllib.request import urlopen
 from datawrappergraphics.icons import dw_icons
 
-# This is the parent class for all datawrapper graphics.
-# It is extended by all other classes in this module.
 
-# The useage goes like:
-#
-#   1. Instantiate a datawrapper graphic (Map, Chart etc.).
-#   2. Add data (a pandas Dataframe)
-#   3. Add headline, deck, footer, etc by calling the respective method.
-#   4. Publish using the publish method (if you want to publish!)
+# There are two opens when creating a new DatawrapperGraphic object:
+    # 
+    #   1. You can create a brand new chart by specifying no chart_id and no copy_id. This is not recommended but can be used to create a large number of charts en-mass,
+    #   and then save their info into a csv or something.
+    # 
+    #   2. You can specify a copy_id, and a new chart will be created by copying that chart. This is also not recommended but can be used for various purposes.
+    #
+    #   3. You can specify a chart that is already made that you want to update. This is the easiest way - copy another chart in the Datawrapper app and then
+    #   use that chart_id.
 
 class DatawrapperGraphic:
     
@@ -36,26 +37,31 @@ class DatawrapperGraphic:
     # What OS is the script running on? This effects timestamping as unix uses UTC.
     global os_name
     
-    # There are two opens when creating a new DatawrapperGraphic object:
-    # 
-    #   1. You can create a brand new chart by specifying no chart_id and no copy_id. This is not recommended but can be used to create a large number of charts en-mass,
-    #   and then save their info into a csv or something.
-    # 
-    #   2. You can specify a copy_id, and a new chart will be created by copying that chart. This is also not recommended but can be used for various purposes.
-    #
-    #   3. You can specify a chart that is already made that you want to update. This is the easiest way - copy another chart in the Datawrapper app and then
-    #   use that chart_id.
+    # Token to authenticate to Datawrapper's API.
+    global DW_AUTH_TOKEN
     
-    def __init__(self, chart_id: str = None, copy_id: str = None):
+    # Path that the script is running from using this module.
+    global path
+    
+    # Name of the script currently running using this module.
+    global script_name
+    
+    def __init__(self, chart_id: str = None, copy_id: str = None, auth_token: str = None):
         
         # Set OS name (see global DatawrapperGraphic variables)
         self.os_name = os.name
+        
+        self.script_name = os.path.basename(sys.argv[0]).replace(".py", "").replace("script-", "")
+        
+        self.path = os.path.dirname(sys.argv[0]) 
+        
+        self.auth(token=auth_token)
         
         # Define common headers for all the below options for instantiating Datawrapper graphics.
         headers = {
                 "Accept": "*/*",
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.auth()}"
+                "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
             }
         
         # If no chart ID is passed, and no copy id is passed, we create a new chart from scratch.
@@ -93,6 +99,8 @@ class DatawrapperGraphic:
             raise Exception(f"Please specify either a chart_id or a copy_id, but not both.")
         
         response = requests.get(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers)
+        
+        
         self.metadata = response.json()
 
     
@@ -109,7 +117,7 @@ class DatawrapperGraphic:
         headers = {
             "Accept": "*/*",
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.auth()}"
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
         }
 
         r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=json.dumps(self.metadata))
@@ -128,7 +136,7 @@ class DatawrapperGraphic:
         headers = {
             "Accept": "*/*",
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.auth()}"
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
         }
         
         # Take the string input as a parameter and put it into a payload object. Then convert to JSON string.
@@ -154,7 +162,7 @@ class DatawrapperGraphic:
         
         headers = {
             "Accept": "*/*", 
-            "Authorization": f"Bearer {self.auth()}"
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
             }
         
         payload =  {
@@ -202,7 +210,7 @@ class DatawrapperGraphic:
         headers = {
             "Accept": "*/*",
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.auth()}"
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
         }
         
         # This is a template object for the structure of the patch payload that Datawrapper API accepts.
@@ -241,7 +249,7 @@ class DatawrapperGraphic:
 
         headers = {
             "Accept": "*/*", 
-            "Authorization": f"Bearer {self.auth()}"
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
             }
 
         r = requests.post(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/publish", headers=headers)
@@ -254,23 +262,26 @@ class DatawrapperGraphic:
     
     
     # This method authenticates to Datawrapper and returns the token for accessing the DW api.
-    
-    def auth(self):
+    def auth(self, token: str = None):
         
-        # On a local machine, it will read the auth.txt file for the token.
-        try:
-            with open('./auth.txt', 'r') as f:
-                DW_AUTH_TOKEN = f.read().strip()
-        # If this is run using Github actions, it will take a secret from the repo instead.
-        except FileNotFoundError:
-            try: DW_AUTH_TOKEN = os.environ['DW_AUTH_TOKEN']
-            except: raise Exception(f"No auth.txt file found, and no environment variable specified for DW_AUTH_TOKEN. Please add one of the two to authenticate to Datawrapper's API.")
-            
-        return DW_AUTH_TOKEN 
+        if token != None:
+            DW_AUTH_TOKEN = token
+        else:
+            # On a local machine, it will read the auth.txt file for the token.
+            try:
+                with open('./auth.txt', 'r') as f:
+                    DW_AUTH_TOKEN = f.read().strip()
+            # If this is run using Github actions, it will take a secret from the repo instead.
+            except FileNotFoundError:
+                try: DW_AUTH_TOKEN = os.environ['DW_AUTH_TOKEN']
+                except: raise Exception(f"No auth.txt file found, and no environment variable specified for DW_AUTH_TOKEN. Please add one of the two to authenticate to Datawrapper's API.")
+        
+        self.DW_AUTH_TOKEN = DW_AUTH_TOKEN    
+        return self 
     
     
     
-    
+
 # The Chart class defines methods and variables for uploading data to datawrapper charts (scatter plots, tables etc).
 # Use this class to create a new, copy, or to manage a currently existing Datawrapper chart (ie. not a map!).
 class Chart(DatawrapperGraphic):
@@ -285,7 +296,7 @@ class Chart(DatawrapperGraphic):
         headers = {
             "Accept": "*/*",
             "Content-Type": "text/csv",
-            "Authorization": f"Bearer {self.auth()}"
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
         }
 
         payload = data.to_csv()
@@ -297,11 +308,7 @@ class Chart(DatawrapperGraphic):
         
         return self
     
-    
-    
-    
-    
-    
+
 
 
 
@@ -311,16 +318,14 @@ class Map(DatawrapperGraphic):
     
     # Script_name variable is used to pull the right icon templates from the assets folder, and is set on init.
     global script_name
-    global icons
+    global icon_list
     
     
     
-    def __init__(self, chart_id: str = None, copy_id: str = None):
-        super().__init__(chart_id, copy_id)
+    def __init__(self, chart_id: str = None, copy_id: str = None, auth_token = None):
+        super().__init__(chart_id, copy_id, auth_token)
         
-        self.script_name = os.path.basename(sys.argv[0]).replace(".py", "").replace("script-", "")
-        
-        self.icons = dw_icons
+        self.icon_list = dw_icons
         
      
 
@@ -369,9 +374,9 @@ class Map(DatawrapperGraphic):
         # Define a list of marker types that are allowed.
         allowed_marker_type_list = ["point", "area"]
         
-        # Define a list of icon types that are allowed
-        # TODO write code to pull this list programmatically when a new template is added to assets folder.
-        allowed_icon_list = ["fire", "attention", "circle-sm", "circle", "city", "droplet", "fire", "star-2", "area"]
+        # Define a list of icon types that are allowed (ie those that are defined in the icons.py file.)
+        allowed_icon_list = [key for key, value in self.icon_list.items()]
+        allowed_icon_list.append("area")
         
         # Create an id column that uses Datawrapper's ID naming convention.
         input_data.loc[:, 'id'] = range(0, len(input_data))
@@ -393,36 +398,48 @@ class Map(DatawrapperGraphic):
         
         for feature in features:
             
-            # Check properties that are required to be able to run this function and raise an error if they are not provided.
-            
-            try: icon = feature["properties"]['icon']
-            except KeyError: raise Exception(f"Icon was not specified in your file. Please add a column for this property.")
-            
-            # Check to make sure the icon type we specified is in the list of allowed marker types.
-            if icon not in allowed_icon_list:
-                raise Exception(f"It looks like you haven't provided a valid icon type. Please ensure the value is one of: {', '.join(allowed_icon_list)}.")
-            
+            # Check if a marker type is specified. If it's not, we'll try to infer the type based on the presence of lat/lng columns or geometry columns (area columns have geometry
+            # point columns have lat/lng.
             try: marker_type = feature["properties"]["type"]
-            except KeyError: raise Exception(f"Marker type was not specified in your file. Please add a column for this property.")
+            except KeyError:
+                try:
+                    if feature["properties"]["latitude"] and feature["properties"]["longitude"]:
+                        marker_type = "point"
+                    else:
+                        marker_type = "area"
+                except KeyError: raise Exception(f"Marker type was not specified in your file, and there's no latitude/longitude or geometry column to infer marker type. Please add a column for these properties.")
             
             # Check to make sure the marker type we specified is in the list of allowed marker types.
             if marker_type not in allowed_marker_type_list:
                 raise Exception(f"It looks like you haven't provided a valid marker type. Please ensure the value is one of: {', '.join(allowed_marker_type_list)}.")
             
+            # Check to see if an icon has been specified. If not, default to 'circle'.
+            try: icon = feature["properties"]['icon']
+            except KeyError:
+                if marker_type == "point":
+                    feature["properties"]["icon"] = "circle"
+                    icon = "circle"
+            
+            # Check to make sure the icon type we specified is in the list of allowed marker types.
+            if icon not in allowed_icon_list:
+                raise Exception(f"It looks like you haven't provided a valid icon type. Please ensure the value is one of: {', '.join(allowed_icon_list)}.")
+            
             # Load the template feature object depending on the type of each marker (area or point). Throw an error if the file can't be found.
-            with open(f"assets/{marker_type}.json", 'r') as f:
+            
+            
+            with open(f"{os.path.dirname(__file__)}/assets/{marker_type}.json", 'r') as f:
                 template = json.load(f)
             
             # These properties have to be handled a little differently than just loop through and replace the values in the template with the new values provided.
             exclusion_list = ["tooltip", "icon", "geometry", "fill", "stroke", "visibility"]
 
             # This code loops through every value provided and replaces that value in the template we loaded above. If the value is not a str or an int, it won't include it.
-            new_feature = {k: feature["properties"][k] if (k in feature["properties"] and k not in exclusion_list and isinstance(v, Union[int, str])) else v for k, v in template.items()}
+            new_feature = {k: feature["properties"][k] if (k in feature["properties"] and k not in exclusion_list and isinstance(v, Union[int, str, float])) else v for k, v in template.items()}
             
             # Now we handle some of the outliers specified in the exclusion list.
             # Tooltip has to be embedded in an object.
             try: new_feature["tooltip"] = {"text": feature["properties"]["tooltip"]}
-            except: new_feature["tooltip"] = {"text": template["tooltip"]}
+            except: new_feature["tooltip"] = template["tooltip"]
             
             # This pulls the "visibility" values from whatever is specified for "visible". This means that currently, you can not disable
             # anything from showing on mobile and desktop seperately.
@@ -449,7 +466,7 @@ class Map(DatawrapperGraphic):
                     except KeyError: raise Exception(f"Latitude or longitude has not been provided. Please provide those values.")
                 
                 # Icon is an object and the whole object needs to be taken from the template file. A string is what's provided by the dataframe, so we have to do this specially.
-                try: new_feature["icon"] = self.icons[feature["properties"]["icon"]]
+                try: new_feature["icon"] = self.icon_list[feature["properties"]["icon"]]
                 except: raise Exception(f"Icon template not found. Please specify a valid icon.")
             
             # Here we handle the special properties of area markers.        
@@ -478,10 +495,10 @@ class Map(DatawrapperGraphic):
         
         # If there are other shapes to be added (ie. highlights of provinces, etc.) then this will use a naming convention to grab them from the shapes folder.
         # Check if there are any extra shapes to add.
-        if os.path.exists(f"assets/shapes/shapes-{self.script_name}.json"):
+        if os.path.exists(f"{self.path}/assets/shapes/shapes-{self.script_name}.json"):
             
             # Open the shape file.
-            with open(f"assets/shapes/shapes-{self.script_name}.json", 'r') as f:
+            with open(f"{self.path}/assets/shapes/shapes-{self.script_name}.json", 'r') as f:
                 extra_shapes = json.load(f)
                 
                 # If there is only one object and it's not in a list, make it a list.
@@ -501,7 +518,7 @@ class Map(DatawrapperGraphic):
         payload = json.dumps(payload)
         
         # Make the HTTP request to the Datawrapper API to upload the data.
-        headers = {"Authorization": f"Bearer {self.auth()}"}
+        headers = {"Authorization": f"Bearer {self.DW_AUTH_TOKEN}"}
         r = requests.put(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers, data=payload)
 
         if r.ok: print(f"SUCCESS: Data added to chart.")
@@ -523,15 +540,14 @@ class Map(DatawrapperGraphic):
         
         headers = {
             "Accept": "text/csv",
-            "Authorization": f"Bearer {self.auth()}"
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
             }
         
-        print(self.CHART_ID)
         response = requests.get(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers)
         markers = response.json()["markers"]
-        
+        print(self.path)
         if save:
-            with open(f"markers-{self.script_name}.json", 'w') as f:
+            with open(f"{self.path}/markers-{self.script_name}.json", 'w') as f:
                 json.dump(markers, f)
                 
         return markers

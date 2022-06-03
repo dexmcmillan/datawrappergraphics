@@ -1,10 +1,7 @@
 README.md
 setup.py
-datawrappergraphics/Chart.py
-datawrappergraphics/DatawrapperGraphic.py
-datawrappergraphics/Map.py
-datawrappergraphics/StormMap.py
 datawrappergraphics/__init__.py
+datawrappergraphics/__main__.py
 datawrappergraphics/icons.py
 datawrappergraphics.egg-info/PKG-INFO
 datawrappergraphics.egg-info/SOURCES.txt
