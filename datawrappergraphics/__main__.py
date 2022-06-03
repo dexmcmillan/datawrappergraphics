@@ -7,6 +7,7 @@ import geopandas
 import datetime
 import logging
 from typing import Union
+import urllib.error
 import pytz
 from io import BytesIO
 from zipfile import ZipFile
@@ -512,17 +513,15 @@ class Map(DatawrapperGraphic):
             
             with open(f"{os.path.dirname(__file__)}/assets/{marker_type}.json", 'r') as f:
                 template = json.load(f)
-            
+                
             # These properties have to be handled a little differently than just loop through and replace the values in the template with the new values provided.
             exclusion_list = ["tooltip", "icon", "geometry", "fill", "stroke", "visibility"]
 
             # This code loops through every value provided and replaces that value in the template we loaded above. If the value is not a str or an int, it won't include it.
-            new_feature = {k: feature["properties"][k] if (k in feature["properties"] and k not in exclusion_list and isinstance(v, Union[int, str, float])) else v for k, v in template.items()}
+            new_feature = {k: feature["properties"][k] if (k in feature["properties"] and v and k not in exclusion_list and isinstance(v, Union[int, str, float])) else v for k, v in template.items()}
+
             
-            # Now we handle some of the outliers specified in the exclusion list.
-            # Tooltip has to be embedded in an object.
-            try: new_feature["tooltip"] = {"text": feature["properties"]["tooltip"]}
-            except: new_feature["tooltip"] = template["tooltip"]
+            
             
             # This pulls the "visibility" values from whatever is specified for "visible". This means that currently, you can not disable
             # anything from showing on mobile and desktop seperately.
@@ -540,6 +539,15 @@ class Map(DatawrapperGraphic):
             # Some properties are different if our entry is a point rather than an area.
             # Here we handle the points.
             if marker_type == "point":
+                
+                # Now we handle some of the outliers specified in the exclusion list.
+                # Tooltip has to be embedded in an object.
+                try: new_feature["tooltip"] = {"text": feature["properties"]["tooltip"]}
+                except: new_feature["tooltip"] = template["tooltip"]
+                
+                for prop in ["markerColor", "markerSymbol"]:
+                    try: new_feature[prop] = feature["properties"][prop]
+                    except KeyError: new_feature[prop] = template[prop]
                 
                 # Coordinates are provided for points by a latitude and a longitude column. They must be specified or an exception is thrown.
                 try: new_feature["coordinates"] = feature["geometry"]["coordinates"]
@@ -562,12 +570,28 @@ class Map(DatawrapperGraphic):
                     "geometry": feature["geometry"]
                     }
                 
+                
+                
                 # The "stroke" needs to be handled differently because the stroke attribute in the datawrapper object is
                 # a boolean value that controls if the stroke is visible or not, whereas the dataframe specifies the stroke
                 # color, not whether it's visible or not.
                 # TODO allow for specification of stroke and fill to be enabled/disabled using boolean.
-                try: new_feature["properties"]["stroke"] = feature["properties"]["stroke"]
-                except: new_feature["properties"]["stroke"] = template["stroke"]
+                
+                for prop in ["stroke", "fill"]:
+                    try:
+                        if isinstance(feature["properties"][prop], str):
+                            new_feature["properties"][prop] = feature["properties"][prop]
+                        else:
+                            new_feature["properties"][prop] = template["properties"][prop]
+                            
+                    except KeyError: new_feature["properties"][prop] = template["properties"][prop]
+                    
+                    try:
+                        if isinstance(feature["properties"][prop + "-opacity"], int | float) and feature["properties"][prop + "-opacity"] != 0.0:
+                            new_feature[prop] = True
+                        else:
+                            new_feature[prop] = False
+                    except KeyError: new_feature["properties"][prop] = True
             
             # If marker type is not either point or area, throw an error. This differs from above error handling in that it
             # the above does not validate that icon is ponit or area.
@@ -578,10 +602,14 @@ class Map(DatawrapperGraphic):
         
         # If there are other shapes to be added (ie. highlights of provinces, etc.) then this will use a naming convention to grab them from the shapes folder.
         # Check if there are any extra shapes to add.
-        if os.path.exists(f"{self.path}/assets/shapes/shapes-{self.script_name}.json"):
+        # TODO allow users to enter their own assets path.
+        
+        shapepath = f"{self.path}/assets/shapes/shapes-{self.script_name}.json"
+        
+        if os.path.exists(shapepath):
             
             # Open the shape file.
-            with open(f"{self.path}/assets/shapes/shapes-{self.script_name}.json", 'r') as f:
+            with open(shapepath, 'r') as f:
                 extra_shapes = json.load(f)
                 
                 # If there is only one object and it's not in a list, make it a list.
@@ -652,21 +680,28 @@ class StormMap(Map):
     global storm_name
     global storm_type
     
+    # The url from which the data originates. An arg for creating a StormMap.
+    global xml_url
     
     
-    def __init__(self, storm_id: str, chart_id: str = None, copy_id: str = None):
+    
+    def __init__(self, storm_id: str, xml_url: str, chart_id: str = None, copy_id: str = None):
         
         # Set storm id from the input given to the class constructor.
         self.storm_id = storm_id
+        self.xml_url = xml_url
         super().__init__(chart_id, copy_id)
     
     
     
     # This method gets the shapefile from the NOAA, which is in a zipfile.
     def __get_shapefile(self, filename, layer):
+        filename = filename.lower()
         
         # Download and open the zipfile.
-        resp = urlopen(filename)
+        print(filename)
+        try: resp = urlopen(filename)
+        except urllib.error.HTTPError: raise Exception(f"Resource is forbidden. It's likely the shapefile for probable path is not publicly accessible.")
         
         # List out names of files in the zipfile.
         files = ZipFile(BytesIO(resp.read())).namelist()
@@ -701,12 +736,14 @@ class StormMap(Map):
         for df in [total_path_points, total_path_line]:
             df["STORMTYPE"] = total_path_points["STORMTYPE"].replace({"TS": "S", "HU": "H", "TD": "D"})
             df = df[df["STORMTYPE"].isin(["D", "H", "S"])]
-
+        
         total_path_points["type"] = "point"
         total_path_points["icon"] = "circle"
-        total_path_points["STORMTYPE"]
         total_path_points["markerSymbol"] = total_path_points["STORMTYPE"]
-        total_path_points["markerColor"] = total_path_points["markerSymbol"].replace({"D": "#567282", "S": "#567282", "H": "#e06618"})
+        total_path_points["markerSymbol"] = total_path_points["markerSymbol"].str.replace("M", "H")
+        total_path_points.loc[~total_path_points["markerSymbol"].isin(["D", "S", "H"]), "markerSymbol"] = ""
+        total_path_points["markerColor"] = total_path_points["markerSymbol"].replace({"H": "#e06618"})
+        total_path_points.loc[~total_path_points["markerColor"].isin(["D", "S", "H"]), "markerColor"] = "#567282"
         total_path_points["scale"] = 1.1
         total_path_points["tooltip"] = ""
         total_path_points["title"] = ""
@@ -725,7 +762,7 @@ class StormMap(Map):
         total_path_line["stroke"] = "#000000"
         total_path_line["stroke-opacity"] = 1.0
         total_path_line["markerColor"] = "#C42127"
-        total_path_line["fill-opacity"] = 0
+        total_path_line["fill-opacity"] = 0.0
         total_path_line["stroke-dasharray"] = "1,2.2"
         total_path_line["tooltip"] = ""
         total_path_line["title"] = ""
@@ -733,12 +770,9 @@ class StormMap(Map):
         # total_path_line = total_path_line[total_path_line["SS"] >= 1]
         
         total_path_line = total_path_line.dissolve(by='STORMNUM')
-        
+        print(total_path_points)
         
         return pd.concat([total_path_points, total_path_line])
-    
-    
-    
     
     # This method is sort of like a custom version of Map's data() method, which is then called after calling this.
     
@@ -750,7 +784,8 @@ class StormMap(Map):
         eastern = pytz.timezone('US/Eastern')
         
         # Get storm metadata.
-        metadata = pd.read_xml("https://www.nhc.noaa.gov/nhc_ep1.xml", xpath="/rss/channel/item[1]/nhc:Cyclone", namespaces={"nhc":"https://www.nhc.noaa.gov"})
+        print(self.xml_url)
+        metadata = pd.read_xml(self.xml_url, xpath="/rss/channel/item[1]/nhc:Cyclone", namespaces={"nhc":"https://www.nhc.noaa.gov"})
         
         # Split the marker for the center of the storm into latitude and longitude values.
         metadata["latitude"] = pd.Series(metadata.at[0, "center"].split(",")[0].strip()).astype(float)
@@ -799,20 +834,20 @@ class StormMap(Map):
         centre_line = self.__get_shapefile(five_day_latest_filename, "5day_lin.shp$")
         
         # Define properties unique to centre line.
-        centre_line["fill"] = "#C42127"
         centre_line["stroke"] = "#000000"
-        centre_line["markerColor"] = "#C42127"
         centre_line["fill-opacity"] = 0.0
+        centre_line["stroke-opacity"] = 0.5
         
         # Get probable path layer from five day forecast shapefile.
         probable_path = self.__get_shapefile(five_day_latest_filename, "5day_pgn.shp$")
         
         # Define properties unique to probable path shape.
         probable_path["fill"] = "#6a3d99"
-        probable_path["stroke"] = "#000000"
+        probable_path["stroke"] = "#6a3d99"
         probable_path["markerColor"] = "#6a3d99"
-        probable_path["fill-opacity"] = 0.2
-        probable_path["stroke-opacity"] = 0
+        probable_path["fill-opacity"] = 0.3
+        probable_path["stroke-opacity"] = 0.0
+        probable_path["title"] = "Probable path"
         
         # Define some common style points for the centre line and the probable path.
         for df in [centre_line, probable_path]:
@@ -830,14 +865,11 @@ class StormMap(Map):
         # TODO remove this, as the new data() method should be able to do this without specifying.
         all_shapes = all_shapes[["markerColor", "fill", "fill-opacity", "stroke", "stroke-opacity", "type", "icon", "latitude", "longitude", "geometry", "title", "tooltip", "scale", "markerSymbol", "stroke-dasharray"]]
         
+        
         # Fill any null values in latitude and longitude columns.
         # TODO do we need these fillna lines?
         all_shapes["latitude"] = all_shapes["latitude"].fillna("")
         all_shapes["longitude"] = all_shapes["longitude"].fillna("")
-        
-        # Do the same for other values so we don't send any null values.
-        for col in ["markerColor", "fill", "fill-opacity", "stroke", "type", "icon", "title", "tooltip", "scale", "markerSymbol"]:
-            all_shapes[col] = all_shapes[col].fillna("")
           
         # I've commented the next line out because I don't think I need it with the new data() method structure.  
         # all_shapes["stroke-dasharray"] = all_shapes["stroke-dasharray"].fillna("100000")

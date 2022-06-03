@@ -10,6 +10,7 @@ import numpy
 
 TEST_MAP_ID = "rCSft"
 TEST_CHART_ID = "W67Od"
+TEST_HURRICANE_MAP_ID = "nSHo0"
 API_TEST_FOLDER = "105625"
 
 
@@ -18,16 +19,14 @@ test_map_data = pd.DataFrame({"title": ["Point 1"], "latitude": [50.2373819], "l
 test_chart_data = pd.DataFrame({"date": pd.date_range("2022-01-01", "2022-06-02")[:50], "value": numpy.random.randint(1, 20, 50)})
 
 
-def test_create_chart():
+# def test_create_chart():
     
-    
-    
-    assert (datawrappergraphics.Chart(folder_id=API_TEST_FOLDER)
-        .data(test_chart_data)
-        .head(f"TEST: Testing datawrappergraphics library's Chart class")
-        .deck(f"A test deck.")
-        .publish()
-    )
+#     assert (datawrappergraphics.Chart(folder_id=API_TEST_FOLDER)
+#         .data(test_chart_data)
+#         .head(f"TEST: Testing datawrappergraphics library's Chart class")
+#         .deck(f"A test deck.")
+#         .publish()
+#     )
     
     
     
@@ -193,6 +192,29 @@ def test_ukraine_map():
                 .publish()
             )
     
+
+
+# A note that this tes will work only until the storm ID is relevant. The data disappears once the storm has passed.
+def test_hurricane_map():
+
+    hurricane_map = (datawrappergraphics.StormMap(chart_id=TEST_HURRICANE_MAP_ID, storm_id="AL012022", xml_url="https://www.nhc.noaa.gov/nhc_at1.xml")
+                    .process_data()
+                    )
+    
+    print(hurricane_map.dataset)
+
+    hurricane_map = hurricane_map.data(hurricane_map.dataset)
+
+    
+
+    assert (hurricane_map
+                    .head(f"TEST: Tracking {hurricane_map.storm_type.lower()} {hurricane_map.storm_name}")
+                    .deck(f"Windspeed is currently measured at <b>{hurricane_map.windspeed} km/h</b>.")
+                    .footer(source="U.S. National Hurricane Center")
+                    .publish()
+                    .move(API_TEST_FOLDER))
+
+
 
 # def test_delete():
     
