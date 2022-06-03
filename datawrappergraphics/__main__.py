@@ -47,7 +47,7 @@ class DatawrapperGraphic:
     # Name of the script currently running using this module.
     global script_name
     
-    def __init__(self, chart_id: str = None, copy_id: str = None, auth_token: str = None):
+    def __init__(self, chart_id: str = None, copy_id: str = None, auth_token: str = None, folder_id: str = None):
         
         # Set OS name (see global DatawrapperGraphic variables)
         self.os_name = os.name
@@ -69,9 +69,16 @@ class DatawrapperGraphic:
         if chart_id == None and copy_id == None:
             
             print(f"No chart specified. Creating new chart...")
-
-            response = requests.post(f"https://api.datawrapper.de/v3/charts/", headers=headers)
             
+            # If a folder is specified in which to create the chart, handle that here.
+            if folder_id:
+                payload = {"folderId": folder_id}
+                
+            # Otherwise, just send an empty payload.    
+            else:
+                payload = {}
+            
+            response = requests.post(f"https://api.datawrapper.de/v3/charts/", json=payload, headers=headers)
             chart_id = response.json()["publicId"]
 
             print(f"New chart created with id {chart_id}")
@@ -363,8 +370,9 @@ class Chart(DatawrapperGraphic):
     
     script_name = os.path.basename(sys.argv[0]).replace(".py", "").replace("script-", "")
     
-    def __init__(self, chart_id: str = None, copy_id: str = None):
-        super().__init__(chart_id, copy_id)
+    def __init__(self, *args, **kwargs):
+        
+        super(Chart, self).__init__(*args, **kwargs)
     
     def data(self, data: pd.DataFrame):
         
@@ -397,8 +405,8 @@ class Map(DatawrapperGraphic):
     
     
     
-    def __init__(self, chart_id: str = None, copy_id: str = None, auth_token = None):
-        super().__init__(chart_id, copy_id, auth_token)
+    def __init__(self, *args, **kwargs):
+        super(Map, self).__init__(*args, **kwargs)
         
         self.icon_list = dw_icons
         

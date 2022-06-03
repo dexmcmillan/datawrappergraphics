@@ -17,6 +17,21 @@ test_map_data = pd.DataFrame({"title": ["Point 1"], "latitude": [50.2373819], "l
 
 test_chart_data = pd.DataFrame({"date": pd.date_range("2022-01-01", "2022-06-02")[:50], "value": numpy.random.randint(1, 20, 50)})
 
+
+def test_create_chart():
+    
+    
+    
+    assert (datawrappergraphics.Chart(folder_id=API_TEST_FOLDER)
+        .data(test_chart_data)
+        .head(f"TEST: Testing datawrappergraphics library's Chart class")
+        .deck(f"A test deck.")
+        .publish()
+    )
+    
+    
+    
+
 def test_simple_chart():
     
     assert (datawrappergraphics.Chart(chart_id=TEST_CHART_ID)
