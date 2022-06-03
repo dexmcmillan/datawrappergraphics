@@ -604,7 +604,8 @@ class Map(DatawrapperGraphic):
         # Check if there are any extra shapes to add.
         # TODO allow users to enter their own assets path.
         
-        shapepath = f"/assets/shapes/shapes-{self.script_name}.json"
+        shapepath = f"assets/shapes/shapes-{self.script_name}.json"
+        print(shapepath)
         
         if os.path.exists(shapepath):
             
