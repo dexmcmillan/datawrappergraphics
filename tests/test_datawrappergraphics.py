@@ -172,9 +172,9 @@ def test_ukraine_map():
         except:
             pass
 
-    source_list_clean = set([item for sublist in source_list_clean for item in sublist if item]).append("Institute for the Study of War and AEI's Critical Threats Project")
+    source_list_clean = set([item for sublist in source_list_clean for item in sublist if item])
 
-    source_string = ", ".join(source_list_clean)
+    source_string = ", ".join(source_list_clean) + ", " + "Institute for the Study of War and AEI's Critical Threats Project"
 
     # We only want these cities to show up on the Eastern Ukraine map.
     eastern_cities = ["Kyiv", "Kharkiv", "Izyum", "Mariupol", "Severodonetsk", "Mykolaiv", "Kherson", "Odesa", "Lyman"]

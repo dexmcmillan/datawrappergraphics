@@ -484,14 +484,17 @@ class Map(DatawrapperGraphic):
             
             # Check if a marker type is specified. If it's not, we'll try to infer the type based on the presence of lat/lng columns or geometry columns (area columns have geometry
             # point columns have lat/lng.
+            
+            print(feature)
             try: marker_type = feature["properties"]["type"]
             except KeyError:
-                try:
-                    if feature["properties"]["latitude"] and feature["properties"]["longitude"]:
+                # try:
+                    print(len(feature["geometry"]["coordinates"]))
+                    if len(feature["geometry"]["coordinates"]["type"].lower()) == "point":
                         marker_type = "point"
                     else:
                         marker_type = "area"
-                except KeyError: raise Exception(f"Marker type was not specified in your file, and there's no latitude/longitude or geometry column to infer marker type. Please add a column for these properties.")
+                # except KeyError: raise Exception(f"Marker type was not specified in your file, and there's no latitude/longitude or geometry column to infer marker type. Please add a column for these properties.")
             
             # Check to make sure the marker type we specified is in the list of allowed marker types.
             if marker_type not in allowed_marker_type_list:
@@ -509,12 +512,8 @@ class Map(DatawrapperGraphic):
                 raise Exception(f"It looks like you haven't provided a valid icon type. Please ensure the value is one of: {', '.join(allowed_icon_list)}.")
             
             # Load the template feature object depending on the type of each marker (area or point). Throw an error if the file can't be found.
-            
-            asset_path = f"{os.path.dirname(__file__)}/tests/assets"
-            
             with open(f"{os.path.dirname(__file__)}/assets/{marker_type}.json", 'r') as f:
                 template = json.load(f)
-                print(template)
                 
             # These properties have to be handled a little differently than just loop through and replace the values in the template with the new values provided.
             exclusion_list = ["tooltip", "icon", "geometry", "fill", "stroke", "visibility", "visible"]
@@ -727,7 +726,6 @@ class StormMap(Map):
         
         best_track_zip = f"https://www.nhc.noaa.gov/gis/best_track/{storm_id}_best_track.zip"
         total_path_points = self.__get_shapefile(best_track_zip, "pts.shp$")
-        
         total_path_line = self.__get_shapefile(best_track_zip, "lin.shp$")
 
         total_path_points = total_path_points[total_path_points["STORMNAME"] == self.storm_name.upper()]
@@ -749,27 +747,13 @@ class StormMap(Map):
         total_path_points["markerColor"] = total_path_points["markerSymbol"].replace({"H": "#e06618"})
         total_path_points.loc[~total_path_points["markerColor"].isin(["D", "S", "H"]), "markerColor"] = "#567282"
         total_path_points["scale"] = 1.1
-        total_path_points["tooltip"] = ""
-        total_path_points["title"] = ""
-
-        # total_path_points.loc[total_path_points["STORMTYPE"] == "D", "storm_type"] = "Depression"
-        # total_path_points.loc[total_path_points["STORMTYPE"] == "H", "storm_type"] = "Hurricane"
-        # total_path_points.loc[total_path_points["STORMTYPE"] == "S", "storm_type"] = "Storm"
-
-        total_path_points["fill"] = "#C42127"
         
-        
-        
-        total_path_line["type"] = "area"
-        total_path_line["icon"] = "area"
-        total_path_line["fill"] = "#C42127"
         total_path_line["stroke"] = "#000000"
-        total_path_line["stroke-opacity"] = 1.0
-        total_path_line["markerColor"] = "#C42127"
-        total_path_line["fill-opacity"] = 0.0
+        
+        # This dasharray thing is not currently working.
         total_path_line["stroke-dasharray"] = "1,2.2"
-        total_path_line["tooltip"] = ""
-        total_path_line["title"] = ""
+        
+        total_path_line["fill-opacity"] = 0.0
         
         # total_path_line = total_path_line[total_path_line["SS"] >= 1]
         
@@ -778,10 +762,7 @@ class StormMap(Map):
         
         return pd.concat([total_path_points, total_path_line])
     
-    # This method is sort of like a custom version of Map's data() method, which is then called after calling this.
-    
-    # TODO add decorator to this to make it a "data" call, to match other maps?
-    # TODO make it so this is called in the Map class's data() method so it instantiates like standard Map class.
+    # This method is a custom version of Map's data() method, which is then called after calling this.
     def data(self):
         
         # NOAA provides data in different timezomes (at least one: CST). Define eastern timezome here for later conversion.
@@ -880,6 +861,8 @@ class StormMap(Map):
 
         # Save as the object's dataset.
         self.dataset = all_shapes
+        
+        print(self.dataset)
         
         # Pass the dataset we've just prepped into the super's data method.
         return super(self.__class__, self).data(self.dataset)
