@@ -11,6 +11,8 @@ import numpy
 TEST_MAP_ID = "rCSft"
 TEST_CHART_ID = "W67Od"
 TEST_HURRICANE_MAP_ID = "nSHo0"
+EASTERN_UKRAINE_CHART_ID = "ioEie"
+
 API_TEST_FOLDER = "105625"
 
 
@@ -64,7 +66,6 @@ def test_export_chart():
 
 # A more robust test to make sure the most complicated map - the Eastern Ukraine map - will work.
 def test_ukraine_map():
-    EASTERN_UKRAINE_CHART_ID = "ioEie"
 
     # Bring in and process shapefile data for Russian advances.
 
@@ -171,21 +172,18 @@ def test_ukraine_map():
         except:
             pass
 
-    source_list_clean = [item for sublist in source_list_clean for item in sublist]
-    source_list_clean = [x for x in source_list_clean if x]
-    source_list_clean = set(source_list_clean)
+    source_list_clean = set([item for sublist in source_list_clean for item in sublist if item]).append("Institute for the Study of War and AEI's Critical Threats Project")
 
-    source_string = ", ".join(source_list_clean) + ", " + "Institute for the Study of War and AEI's Critical Threats Project"
+    source_string = ", ".join(source_list_clean)
 
     # We only want these cities to show up on the Eastern Ukraine map.
     eastern_cities = ["Kyiv", "Kharkiv", "Izyum", "Mariupol", "Severodonetsk", "Mykolaiv", "Kherson", "Odesa", "Lyman"]
 
     # Bring together points and shapes for import into Datawrapper map.
     data = pd.concat([areas, points[points["title"].isin(eastern_cities)]])
-    data["visible"] = True
-
+    
     (datawrappergraphics.Map(chart_id=EASTERN_UKRAINE_CHART_ID)
-                .data(data)
+                .data(data, append="./tests/assets/shapes/shapes-easternukrainemap.json")
                 .head(f"TEST: Russia launches offensive in Eastern Ukraine")
                 .deck("Tap or hover over a point to read more about fighting in that area.")
                 .footer(note=f"Source: {source_string}.", byline="Wendy Martinez, Dexter McMillan")
@@ -194,25 +192,21 @@ def test_ukraine_map():
     
 
 
-# A note that this tes will work only until the storm ID is relevant. The data disappears once the storm has passed.
+# A note that this test will work only until the storm ID is relevant. The data disappears once the storm has passed.
 def test_hurricane_map():
 
     hurricane_map = (datawrappergraphics.StormMap(chart_id=TEST_HURRICANE_MAP_ID, storm_id="AL012022", xml_url="https://www.nhc.noaa.gov/nhc_at1.xml")
-                    .process_data()
+                    .data()
                     )
     
-    print(hurricane_map.dataset)
-
-    hurricane_map = hurricane_map.data(hurricane_map.dataset)
-
-    
-
-    assert (hurricane_map
+    hurricane_map = (hurricane_map
                     .head(f"TEST: Tracking {hurricane_map.storm_type.lower()} {hurricane_map.storm_name}")
                     .deck(f"Windspeed is currently measured at <b>{hurricane_map.windspeed} km/h</b>.")
                     .footer(source="U.S. National Hurricane Center")
                     .publish()
                     .move(API_TEST_FOLDER))
+    
+    assert hurricane_map
 
 
 

@@ -6,7 +6,6 @@ import pandas as pd
 import geopandas
 import datetime
 import logging
-from typing import Union
 import urllib.error
 import pytz
 from io import BytesIO
@@ -453,13 +452,14 @@ class Map(DatawrapperGraphic):
     # This method handles the majority of the heavy lifting for map data.
     # In essence, it converts either a pd.DataFrame or a geopandas.GeoDataFrame to a GEOJson object, then
     # replaces values in a template with custom values specified in the dataframe.
-    def data(self, input_data: Union[pd.DataFrame, geopandas.GeoDataFrame]):
+    def data(self, input_data: pd.DataFrame | geopandas.GeoDataFrame, append: str = None):
         
         # Define a list of marker types that are allowed.
         allowed_marker_type_list = ["point", "area"]
         
         # Define a list of icon types that are allowed (ie those that are defined in the icons.py file.)
         allowed_icon_list = [key for key, value in self.icon_list.items()]
+        # Append "area" to this list. These icons are handled a bit differently so there is no icon defined for them.
         allowed_icon_list.append("area")
         
         # Create an id column that uses Datawrapper's ID naming convention.
@@ -510,18 +510,24 @@ class Map(DatawrapperGraphic):
             
             # Load the template feature object depending on the type of each marker (area or point). Throw an error if the file can't be found.
             
+            asset_path = f"{os.path.dirname(__file__)}/tests/assets"
             
             with open(f"{os.path.dirname(__file__)}/assets/{marker_type}.json", 'r') as f:
                 template = json.load(f)
+                print(template)
                 
             # These properties have to be handled a little differently than just loop through and replace the values in the template with the new values provided.
-            exclusion_list = ["tooltip", "icon", "geometry", "fill", "stroke", "visibility"]
+            exclusion_list = ["tooltip", "icon", "geometry", "fill", "stroke", "visibility", "visible"]
 
             # This code loops through every value provided and replaces that value in the template we loaded above. If the value is not a str or an int, it won't include it.
-            new_feature = {k: feature["properties"][k] if (k in feature["properties"] and v and k not in exclusion_list and isinstance(v, Union[int, str, float])) else v for k, v in template.items()}
-
+            new_feature = {k: feature["properties"][k] if (k in feature["properties"] and v is not None and k not in exclusion_list) else template[k] for k, v in template.items() if k not in exclusion_list and k is not None}
             
+            # The visible property has to be handled a little differently because it is not nested in the properties object of the marker, it's in the first level.
+            first_level_properties = ["visible"]
             
+            for prop in first_level_properties:
+                try: new_feature[prop] = feature[prop]
+                except: new_feature[prop] = template[prop]
             
             # This pulls the "visibility" values from whatever is specified for "visible". This means that currently, you can not disable
             # anything from showing on mobile and desktop seperately.
@@ -531,10 +537,9 @@ class Map(DatawrapperGraphic):
                     "mobile": feature["properties"]["visible"],
                 }
             except KeyError: new_feature["visibility"] = {
-                    "desktop": template["visible"],
-                    "mobile": template["visible"],
+                    "desktop": True,
+                    "mobile": True,
                 }
-            
             
             # Some properties are different if our entry is a point rather than an area.
             # Here we handle the points.
@@ -591,7 +596,7 @@ class Map(DatawrapperGraphic):
                             new_feature[prop] = True
                         else:
                             new_feature[prop] = False
-                    except KeyError: new_feature["properties"][prop] = True
+                    except KeyError: new_feature[prop] = True
             
             # If marker type is not either point or area, throw an error. This differs from above error handling in that it
             # the above does not validate that icon is ponit or area.
@@ -604,13 +609,10 @@ class Map(DatawrapperGraphic):
         # Check if there are any extra shapes to add.
         # TODO allow users to enter their own assets path.
         
-        shapepath = f"assets/shapes/shapes-{self.script_name}.json"
-        print(shapepath)
-        
-        if os.path.exists(shapepath):
+        if append:
             
             # Open the shape file.
-            with open(shapepath, 'r') as f:
+            with open(append, 'r') as f:
                 extra_shapes = json.load(f)
                 
                 # If there is only one object and it's not in a list, make it a list.
@@ -691,6 +693,7 @@ class StormMap(Map):
         # Set storm id from the input given to the class constructor.
         self.storm_id = storm_id
         self.xml_url = xml_url
+        
         super().__init__(chart_id, copy_id)
     
     
@@ -779,7 +782,7 @@ class StormMap(Map):
     
     # TODO add decorator to this to make it a "data" call, to match other maps?
     # TODO make it so this is called in the Map class's data() method so it instantiates like standard Map class.
-    def process_data(self):
+    def data(self):
         
         # NOAA provides data in different timezomes (at least one: CST). Define eastern timezome here for later conversion.
         eastern = pytz.timezone('US/Eastern')
@@ -878,5 +881,5 @@ class StormMap(Map):
         # Save as the object's dataset.
         self.dataset = all_shapes
         
-        # Return self so we can chain methods.
-        return self
+        # Pass the dataset we've just prepped into the super's data method.
+        return super(self.__class__, self).data(self.dataset)
