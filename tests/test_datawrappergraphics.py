@@ -56,9 +56,9 @@ def test_simple_map():
 
 
 
-def test_export_chart():
+# def test_export_chart():
     
-    assert datawrappergraphics.Map(chart_id=TEST_MAP_ID).export()
+#     assert datawrappergraphics.Map(chart_id=TEST_MAP_ID).export()
 
 
 
@@ -109,7 +109,7 @@ def test_ukraine_map():
     areas["icon"] = "area"
 
     # Simplify the geometry so it's under 2MB for import into Datawrapper.
-    areas["geometry"] = areas["geometry"].simplify(1)
+    areas["geometry"] = areas["geometry"].simplify(2)
 
     # Dissolve so there are only as many shapes as there are files.
     areas = areas.dissolve(by="layer")
@@ -192,21 +192,21 @@ def test_ukraine_map():
     
 
 
-# A note that this test will work only until the storm ID is relevant. The data disappears once the storm has passed.
-def test_hurricane_map():
+# # A note that this test will work only until the storm ID is relevant. The data disappears once the storm has passed.
+# def test_hurricane_map():
 
-    hurricane_map = (datawrappergraphics.StormMap(chart_id=TEST_HURRICANE_MAP_ID, storm_id="AL012022", xml_url="https://www.nhc.noaa.gov/nhc_at1.xml")
-                    .data()
-                    )
+#     hurricane_map = (datawrappergraphics.StormMap(chart_id=TEST_HURRICANE_MAP_ID, storm_id="AL012022", xml_url="https://www.nhc.noaa.gov/nhc_at1.xml")
+#                     .data()
+#                     )
     
-    hurricane_map = (hurricane_map
-                    .head(f"TEST: Tracking {hurricane_map.storm_type.lower()} {hurricane_map.storm_name}")
-                    .deck(f"Windspeed is currently measured at <b>{hurricane_map.windspeed} km/h</b>.")
-                    .footer(source="U.S. National Hurricane Center")
-                    .publish()
-                    .move(API_TEST_FOLDER))
+#     hurricane_map = (hurricane_map
+#                     .head(f"TEST: Tracking {hurricane_map.storm_type.lower()} {hurricane_map.storm_name}")
+#                     .deck(f"Windspeed is currently measured at <b>{hurricane_map.windspeed} km/h</b>.")
+#                     .footer(source="U.S. National Hurricane Center")
+#                     .publish()
+#                     .move(API_TEST_FOLDER))
     
-    assert hurricane_map
+#     assert hurricane_map
 
 
 

@@ -14,12 +14,14 @@ setup(
         "pandas",
         "geopandas",
         "requests",
+        "geojson"
         ],
     setup_requires=[
         'pytest-runner'],
     tests_require=[
         'pytest',
-        'pytest-runner'],
+        'pytest-runner',
+        "geojson"],
     test_suite='tests',
     filterwarnings='ignore::DeprecationWarning',
 )

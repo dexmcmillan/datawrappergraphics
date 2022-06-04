@@ -8,6 +8,9 @@ import datetime
 import logging
 import urllib.error
 import pytz
+import numpy
+from geojson import Feature
+import shapely.wkt as wkt
 from io import BytesIO
 from zipfile import ZipFile
 from urllib.request import urlopen
@@ -462,144 +465,162 @@ class Map(DatawrapperGraphic):
         # Append "area" to this list. These icons are handled a bit differently so there is no icon defined for them.
         allowed_icon_list.append("area")
         
-        # Create an id column that uses Datawrapper's ID naming convention.
-        input_data.loc[:, 'id'] = range(0, len(input_data))
-        input_data.loc[:, "id"] = input_data.loc[:, 'id'].apply(lambda x: f"m{x}")
-        
-        # Check if the data input is a pandas dataframe or a geopandas dataframe. if it's pandas, call df_to_geojson(). If not, convert crs and convert geopandas to json.
-        # The outcome of this if/else is a list of json objects that can be iterated through.
-        if not isinstance(input_data, geopandas.GeoDataFrame):
-            input_data = self.df_to_geojson(input_data)
-        else:
-            input_data = input_data.to_crs("EPSG:4326")
-            input_data = json.loads(input_data.to_json())
-        
-        # Get only the features from the object.
-        features = input_data["features"]
-        
         # New list for storing the altered geojson.
         new_features = []
         
-        for feature in features:
+        if isinstance(input_data, geopandas.GeoDataFrame):
+            input_data = input_data.to_crs("EPSG:4326")
+        
+        for i, feature in input_data.iterrows():
+            
+            print(i)
+            print(feature)
             
             # Check if a marker type is specified. If it's not, we'll try to infer the type based on the presence of lat/lng columns or geometry columns (area columns have geometry
             # point columns have lat/lng.
-            
-            print(feature)
-            try: marker_type = feature["properties"]["type"]
-            except KeyError:
-                # try:
-                    print(len(feature["geometry"]["coordinates"]))
-                    if len(feature["geometry"]["coordinates"]["type"].lower()) == "point":
-                        marker_type = "point"
-                    else:
-                        marker_type = "area"
-                # except KeyError: raise Exception(f"Marker type was not specified in your file, and there's no latitude/longitude or geometry column to infer marker type. Please add a column for these properties.")
+            try: marker_type = feature["type"]
+            except: marker_type = "point"
             
             # Check to make sure the marker type we specified is in the list of allowed marker types.
             if marker_type not in allowed_marker_type_list:
                 raise Exception(f"It looks like you haven't provided a valid marker type. Please ensure the value is one of: {', '.join(allowed_marker_type_list)}.")
             
             # Check to see if an icon has been specified. If not, default to 'circle'.
-            try: icon = feature["properties"]['icon']
-            except KeyError:
+            try: icon = feature['icon']
+            except:
                 if marker_type == "point":
-                    feature["properties"]["icon"] = "circle"
+                    feature["icon"] = "circle"
                     icon = "circle"
             
             # Check to make sure the icon type we specified is in the list of allowed marker types.
             if icon not in allowed_icon_list:
                 raise Exception(f"It looks like you haven't provided a valid icon type. Please ensure the value is one of: {', '.join(allowed_icon_list)}.")
             
+            def get_geo(string):
+                g = wkt.loads(str(string))
+                f = Feature(geometry=g, properties={})
+                return f
+            
             # Load the template feature object depending on the type of each marker (area or point). Throw an error if the file can't be found.
-            with open(f"{os.path.dirname(__file__)}/assets/{marker_type}.json", 'r') as f:
-                template = json.load(f)
-                
-            # These properties have to be handled a little differently than just loop through and replace the values in the template with the new values provided.
-            exclusion_list = ["tooltip", "icon", "geometry", "fill", "stroke", "visibility", "visible"]
-
-            # This code loops through every value provided and replaces that value in the template we loaded above. If the value is not a str or an int, it won't include it.
-            new_feature = {k: feature["properties"][k] if (k in feature["properties"] and v is not None and k not in exclusion_list) else template[k] for k, v in template.items() if k not in exclusion_list and k is not None}
-            
-            # The visible property has to be handled a little differently because it is not nested in the properties object of the marker, it's in the first level.
-            first_level_properties = ["visible"]
-            
-            for prop in first_level_properties:
-                try: new_feature[prop] = feature[prop]
-                except: new_feature[prop] = template[prop]
-            
-            # This pulls the "visibility" values from whatever is specified for "visible". This means that currently, you can not disable
-            # anything from showing on mobile and desktop seperately.
-            # TODO implement separate control for visiblity on desktop and mobile. If values are not specified, use default values from template.
-            try: new_feature["visibility"] = {
-                    "desktop": feature["properties"]["visible"],
-                    "mobile": feature["properties"]["visible"],
-                }
-            except KeyError: new_feature["visibility"] = {
-                    "desktop": True,
-                    "mobile": True,
-                }
-            
-            # Some properties are different if our entry is a point rather than an area.
-            # Here we handle the points.
             if marker_type == "point":
+                new_feature = {
+                "type": "point",
+                "title": feature["title"] if "title" in input_data else "#C42127",
+                "icon": self.icon_list[feature["icon"]],
+                "scale": feature["scale"] if "scale" in input_data else 1.1,
+                "textPosition": True,
+                "markerColor": feature["markerColor"] if "markerColor" in input_data else "#C42127",
+                "markerSymbol": feature["markerSymbol"] if "markerSymbol" in input_data else "",
+                "markerTextColor": "#333333",
+                "anchor": feature["anchor"] if "anchor" in input_data else "middle-left",
+                "offsetY": 0,
+                "offsetX": 0,
+                "labelStyle": "plain",
+                "text": {
+                    "bold": False,
+                    "color": "#333333",
+                    "fontSize": 14,
+                    "halo": "#f2f3f0",
+                    "italic": False,
+                    "space": False,
+                    "uppercase": False
+                },
+                "class": "",
+                "rotate": 0,
+                "visible": feature["visible"] if "visible" in input_data else True,
+                "locked": False,
+                "preset": "-",
+                "visibility": {
+                    "desktop": feature["visible"] if "visible" in input_data else True,
+                    "mobile": feature["visible"] if "visible" in input_data else True,
+                },
+                "tooltip": {
+                    "text": feature["tooltip"] if "tooltip" in input_data else ""
+                },
+                "connectorLine": {
+                    "enabled": False,
+                    "arrowHead": "lines",
+                    "type": "curveRight",
+                    "targetPadding": 3,
+                    "stroke": 1,
+                    "lineLength": 0
+                },
+                "coordinates": [feature["longitude"], feature["latitude"]]
+                }
                 
-                # Now we handle some of the outliers specified in the exclusion list.
-                # Tooltip has to be embedded in an object.
-                try: new_feature["tooltip"] = {"text": feature["properties"]["tooltip"]}
-                except: new_feature["tooltip"] = template["tooltip"]
-                
-                for prop in ["markerColor", "markerSymbol"]:
-                    try: new_feature[prop] = feature["properties"][prop]
-                    except KeyError: new_feature[prop] = template[prop]
-                
-                # Coordinates are provided for points by a latitude and a longitude column. They must be specified or an exception is thrown.
-                try: new_feature["coordinates"] = feature["geometry"]["coordinates"]
-                except TypeError:
-                    # Latitude and longtitude are required inputs, so throw an error if they can't be found.
-                    try: new_feature["coordinates"] = [float(feature["properties"]["longitude"]), float(feature["properties"]["latitude"])]
-                    except KeyError: raise Exception(f"Latitude or longitude has not been provided. Please provide those values.")
-                
-                # Icon is an object and the whole object needs to be taken from the template file. A string is what's provided by the dataframe, so we have to do this specially.
-                try: new_feature["icon"] = self.icon_list[feature["properties"]["icon"]]
-                except: raise Exception(f"Icon template not found. Please specify a valid icon.")
             
-            # Here we handle the special properties of area markers.        
+                
             elif marker_type == "area":
                 
-                # Area markers have a special attribute called "feature" that houses the geometry. Note the "type" must be feature or DW will error.
-                new_feature["feature"] = {
-                    "type": "Feature",
-                    "properties": [],
-                    "geometry": feature["geometry"]
-                    }
+                new_feature = {
+                    "type": "area",
+                    "title": feature["title"] if "title" in input_data and feature["title"] is not numpy.nan else "#C42127",
+                    "visible": feature["visible"] if "visible" in input_data and feature["visible"] is not numpy.nan else True,
+                    "fill": feature["fill"] if "fill" in input_data and feature["fill"] is not numpy.nan and isinstance(feature["fill"], bool) else True,
+                    "stroke": feature["stroke"] if "stroke" in input_data and feature["stroke"] is not numpy.nan and isinstance(feature["fill"], bool) else True,
+                    "exactShape": False,
+                    "highlight": False,
+                    "markerColor": feature["markerColor"] if "markerColor" in input_data and feature["markerColor"] is not numpy.nan else "#C42127",
+                    "properties": {
+                        "fill": feature["fill"] if "fill" in input_data and feature["fill"] is not numpy.nan and isinstance(feature["fill"], str) else "#C42127",
+                        "fill-opacity": feature["fill-opacity"] if "fill-opacity" in input_data and feature["fill-opacity"] is not numpy.nan else 1.0,
+                        "stroke": feature["stroke"] if "stroke" in input_data and feature["stroke"] is not numpy.nan and isinstance(feature["fill"], str) else "#C42127",
+                        "stroke-width": 1,
+                        "stroke-opacity": feature["stroke-opacity"] if "stroke-opacity" in input_data and feature["stroke-opacity"] is not numpy.nan else 1.0,
+                        "stroke-dasharray": feature["stroke-dasharray"] if "stroke-dasharray" in input_data and feature["stroke-dasharray"] is not numpy.nan else "100000",
+                        "pattern": "solid",
+                        "pattern-line-width": 2,
+                        "pattern-line-gap": 2
+                    },
+                    "icon": {"id": "area",
+                        "path": "M225-132a33 33 0 0 0-10 1 38 38 0 0 0-27 28l-187 798a39 39 0 0 0 9 34 37 37 0 0 0 33 12l691-93 205 145a38 38 0 0 0 40 2 38 38 0 0 0 20-36l-54-653a38 38 0 0 0-17-28 38 38 0 0 0-32-5l-369 108-274-301a39 39 0 0 0-28-12z",
+                        "horiz-adv-x": 1000,
+                        "scale": 1.1,
+                        "outline": "2px"},
+                    "visibility": {
+                        "desktop": feature["visible"] if "visible" in input_data and feature["visible"] is not numpy.nan else True,
+                        "mobile": feature["visible"] if "visible" in input_data and feature["visible"] is not numpy.nan else True,
+                    },
+                    "feature": Feature(geometry=feature["geometry"], properties={})
+                }
                 
-                
-                
-                # The "stroke" needs to be handled differently because the stroke attribute in the datawrapper object is
-                # a boolean value that controls if the stroke is visible or not, whereas the dataframe specifies the stroke
-                # color, not whether it's visible or not.
-                # TODO allow for specification of stroke and fill to be enabled/disabled using boolean.
-                
-                for prop in ["stroke", "fill"]:
-                    try:
-                        if isinstance(feature["properties"][prop], str):
-                            new_feature["properties"][prop] = feature["properties"][prop]
-                        else:
-                            new_feature["properties"][prop] = template["properties"][prop]
-                            
-                    except KeyError: new_feature["properties"][prop] = template["properties"][prop]
-                    
-                    try:
-                        if isinstance(feature["properties"][prop + "-opacity"], int | float) and feature["properties"][prop + "-opacity"] != 0.0:
-                            new_feature[prop] = True
-                        else:
-                            new_feature[prop] = False
-                    except KeyError: new_feature[prop] = True
             
-            # If marker type is not either point or area, throw an error. This differs from above error handling in that it
-            # the above does not validate that icon is ponit or area.
-            else: raise Exception(f"Something is wrong with your marker type.")
+            # # Here we handle the special properties of area markers.        
+            # elif marker_type == "area":
+                
+            #     # Area markers have a special attribute called "feature" that houses the geometry. Note the "type" must be feature or DW will error.
+            #     new_feature["feature"] = {
+            #         "type": "Feature",
+            #         "properties": [],
+            #         "geometry": feature["geometry"]
+            #         }
+                
+                
+                
+            #     # The "stroke" needs to be handled differently because the stroke attribute in the datawrapper object is
+            #     # a boolean value that controls if the stroke is visible or not, whereas the dataframe specifies the stroke
+            #     # color, not whether it's visible or not.
+            #     # TODO allow for specification of stroke and fill to be enabled/disabled using boolean.
+                
+            #     for prop in ["stroke", "fill"]:
+            #         try:
+            #             if isinstance(feature["properties"][prop], str):
+            #                 new_feature["properties"][prop] = feature["properties"][prop]
+            #             else:
+            #                 new_feature["properties"][prop] = template["properties"][prop]
+                            
+            #         except KeyError: new_feature["properties"][prop] = template["properties"][prop]
+                    
+            #         try:
+            #             if isinstance(feature["properties"][prop + "-opacity"], int | float) and feature["properties"][prop + "-opacity"] != 0.0:
+            #                 new_feature[prop] = True
+            #             else:
+            #                 new_feature[prop] = False
+            #         except KeyError: new_feature[prop] = True
+            
+            # # If marker type is not either point or area, throw an error. This differs from above error handling in that it
+            # # the above does not validate that icon is ponit or area.
+            # else: raise Exception(f"Something is wrong with your marker type.")
             
             new_features.append(new_feature)
 
