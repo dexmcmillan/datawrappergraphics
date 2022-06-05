@@ -8,7 +8,7 @@ import datetime
 import logging
 import urllib.error
 import numpy
-from geojson import Feature
+from geojson import Feature, Point
 from io import BytesIO
 from zipfile import ZipFile
 from urllib.request import urlopen
@@ -562,16 +562,17 @@ class Map(DatawrapperGraphic):
             
             # Load the template feature object depending on the type of each marker (area or point). Throw an error if the file can't be found.
             if marker_type == "point":
+                
                 new_feature = {
                 "type": "point",
-                "title": feature["title"] if "title" in input_data and feature["title"] is not numpy.nan else "",
-                "icon": self.icon_list[feature["icon"]] if "icon" in input_data and feature["icon"] is not numpy.nan else self.icon_list["circle"],
-                "scale": feature["scale"] if "scale" in input_data and feature["scale"] is not numpy.nan else 1.1,
+                "title": feature["title"] if "title" in input_data and not pd.isna(feature["title"]) else "",
+                "icon": self.icon_list[feature["icon"]] if "icon" in input_data and not pd.isna(feature["icon"]) else self.icon_list["circle"],
+                "scale": feature["scale"] if "scale" in input_data and not pd.isna(feature["scale"]) else 1.1,
                 "textPosition": True,
-                "markerColor": feature["markerColor"] if "markerColor" in input_data and feature["markerColor"] is not numpy.nan else "#C42127",
-                "markerSymbol": feature["markerSymbol"] if "markerSymbol" in input_data and feature["markerSymbol"] is not numpy.nan else "",
+                "markerColor": feature["markerColor"] if "markerColor" in input_data and not pd.isna(feature["markerColor"]) else "#C42127",
+                "markerSymbol": feature["markerSymbol"] if "markerSymbol" in input_data and not pd.isna(feature["markerSymbol"]) else "",
                 "markerTextColor": "#333333",
-                "anchor": feature["anchor"] if "anchor" in input_data and feature["anchor"] is not numpy.nan else "middle-left",
+                "anchor": feature["anchor"] if "anchor" in input_data and not pd.isna(feature["anchor"]) else "middle-left",
                 "offsetY": 0,
                 "offsetX": 0,
                 "labelStyle": "plain",
@@ -586,15 +587,15 @@ class Map(DatawrapperGraphic):
                 },
                 "class": "",
                 "rotate": 0,
-                "visible": feature["visible"] if "visible" in input_data and feature["visible"] is not numpy.nan else True,
+                "visible": feature["visible"] if "visible" in input_data and not pd.isna(feature["visible"]) else True,
                 "locked": False,
                 "preset": "-",
                 "visibility": {
-                    "desktop": feature["visible"] if "visible" in input_data and feature["visible"] is not numpy.nan else True,
-                    "mobile": feature["visible"] if "visible" in input_data and feature["visible"] is not numpy.nan else True,
+                    "desktop": feature["visible"] if "visible" in input_data and not pd.isna(feature["visible"]) else True,
+                    "mobile": feature["visible"] if "visible" in input_data and not pd.isna(feature["visible"]) else True,
                 },
                 "tooltip": {
-                    "text": feature["tooltip"] if "tooltip" in input_data and feature["tooltip"] is not numpy.nan else ""
+                    "text": feature["tooltip"] if "tooltip" in input_data and not pd.isna(feature["tooltip"]) else ""
                 },
                 "connectorLine": {
                     "enabled": False,
@@ -604,29 +605,39 @@ class Map(DatawrapperGraphic):
                     "stroke": 1,
                     "lineLength": 0
                 },
-                "coordinates": [feature["longitude"], feature["latitude"]]
                 }
-                
+
+                # For coordinates for point markers, users can specify either points in WKY Point form,
+                # or latitude and longitude columns. This logic handles the creation of the coordinates
+                # list differently depending on which columns are present.
+                if "longitude" and "latitude" in feature:
+                    new_feature["coordinates"] = [feature["longitude"], feature["latitude"]]
+                elif hasattr(feature, "geometry"):
+                    try: new_feature["coordinates"] = [float(feature["geometry"].x), float(feature["geometry"].y)]
+                    except: raise Exception(f"There was an issue with converting geometry column coordinates into coordinates. Please ensure geometry for point markers is a WKT of type Point.")
+                else:
+                    raise Exception(f'No geometry or latitude and longitude columns found in input data.')
             
-                
+            
+            
             elif marker_type == "area":
-                
+                    
                 new_feature = {
                     "type": "area",
-                    "title": feature["title"] if "title" in input_data and feature["title"] is not numpy.nan else "",
-                    "visible": feature["visible"] if "visible" in input_data and feature["visible"] is not numpy.nan else True,
-                    "fill": feature["fill"] if "fill" in input_data and feature["fill"] is not numpy.nan and isinstance(feature["fill"], bool) else True,
-                    "stroke": feature["stroke"] if "stroke" in input_data and feature["stroke"] is not numpy.nan and isinstance(feature["fill"], bool) else True,
+                    "title": feature["title"] if "title" in input_data and not pd.isna(feature["title"]) else "",
+                    "visible": feature["visible"] if "visible" in input_data and not pd.isna(feature["visible"]) else True,
+                    "fill": feature["fill"] if "fill" in input_data and not pd.isna(feature["fill"])and isinstance(feature["fill"], bool) else True,
+                    "stroke": feature["stroke"] if "stroke" in input_data  and not pd.isna(feature["stroke"]) and isinstance(feature["fill"], bool) else True,
                     "exactShape": False,
                     "highlight": False,
-                    "markerColor": feature["markerColor"] if "markerColor" in input_data and feature["markerColor"] is not numpy.nan else "#C42127",
+                    "markerColor": feature["markerColor"] if "markerColor" in input_data and not pd.isna(feature["markerColor"]) else "#C42127",
                     "properties": {
-                        "fill": feature["fill"] if "fill" in input_data and feature["fill"] is not numpy.nan and isinstance(feature["fill"], str) else "#C42127",
-                        "fill-opacity": feature["fill-opacity"] if "fill-opacity" in input_data and feature["fill-opacity"] is not numpy.nan else 1.0,
-                        "stroke": feature["stroke"] if "stroke" in input_data and feature["stroke"] is not numpy.nan and isinstance(feature["fill"], str) else "#000000",
+                        "fill": feature["fill"] if "fill" in input_data and not pd.isna(feature["fill"]) and isinstance(feature["fill"], str) else "#C42127",
+                        "fill-opacity": feature["fill-opacity"] if ("fill-opacity" in feature and feature["fill-opacity"] and not pd.isna(feature["fill-opacity"])) else 0.3,
+                        "stroke": feature["stroke"] if "stroke" in input_data and not pd.isna(feature["stroke"]) and isinstance(feature["fill"], str) else "#000000",
                         "stroke-width": 1,
-                        "stroke-opacity": 1.0,
-                        "stroke-dasharray": feature["stroke-dasharray"] if "stroke-dasharray" in input_data and feature["stroke-dasharray"] is not numpy.nan else "100000",
+                        "stroke-opacity": feature["stroke-opacity"] if ("stroke-opacity" in feature and feature["stroke-opacity"] and not pd.isna(feature["stroke-opacity"])) else 0.7,
+                        "stroke-dasharray": feature["stroke-dasharray"] if "stroke-dasharray" in input_data and not pd.isna(feature["stroke-dasharray"]) else "100000",
                         "pattern": "solid",
                         "pattern-line-width": 2,
                         "pattern-line-gap": 2
@@ -637,8 +648,8 @@ class Map(DatawrapperGraphic):
                         "scale": 1.1,
                         "outline": "2px"},
                     "visibility": {
-                        "desktop": feature["visible"] if "visible" in input_data and feature["visible"] is not numpy.nan else True,
-                        "mobile": feature["visible"] if "visible" in input_data and feature["visible"] is not numpy.nan else True,
+                        "desktop": feature["visible"] if "visible" in input_data and not pd.isna(feature["visible"]) else True,
+                        "mobile": feature["visible"] if "visible" in input_data and not pd.isna(feature["visible"]) else True,
                     },
                     "feature": {
                         "type": "Feature",
@@ -676,7 +687,7 @@ class Map(DatawrapperGraphic):
             
         with open(f"./markers-{self.script_name}.json", 'w') as f:
                 json.dump(new_features, f)
-            
+        
         # Change layout of the markers to match what Datawrapper likes to receive.    
         payload = {"markers": new_features}
         payload = json.dumps(payload)
@@ -771,37 +782,39 @@ class StormMap(Map):
     
     
     # This function gets the total path of the hurricane, which is stored in a separate zip file entirely from the others.
-    # TODO clean up this function ugh.
+    # This function is not used currently.
     def __total_path(self, storm_id):
         
         # Get the best track zipfile that contains the shapefile about the historical path of the storm.
         best_track_zip = f"https://www.nhc.noaa.gov/gis/best_track/{storm_id}_best_track.zip"
         
-        # Pull the shapefile out of this zip file.
+        # Pull the points shapefile out of this zip file.
         points = self.__get_shapefile(best_track_zip, "pts.shp$")
 
         # points = points[points["STORMNAME"] == self.storm_name.upper()]
         points = points.rename(columns={"LAT": "latitude", "LON": "longitude"})
 
+        # Turn the geometry column into a lat/long column.
+        # We do this because that's what DatawrapperGraphics's data() method uses for points (it does not recognize WKT POINT() features).
         points["longitude"] = points["geometry"].x.astype(float)
         points["latitude"] = points["geometry"].y.astype(float)
         points = points.drop(columns=["geometry"])
         
-        for df in [points, line]:
-            df["STORMTYPE"] = points["STORMTYPE"].replace({"TS": "S", "HU": "H", "TD": "D"})
-            df = df[df["STORMTYPE"].isin(["D", "H", "S"])]
-        
+        # Set some attributes that are required by the data() method for points that will eventually be called on this dataset.
         points["type"] = "point"
         points["icon"] = "circle"
-        points["markerSymbol"] = points["STORMTYPE"]
-        points["markerSymbol"] = points["markerSymbol"].str.replace("M", "H")
+        points["scale"] = 1.1
+        
+        points["markerSymbol"] = points["STORMTYPE"].str.replace("M", "H")
         points.loc[~points["markerSymbol"].isin(["D", "S", "H"]), "markerSymbol"] = ""
         points["markerColor"] = points["markerSymbol"].replace({"H": "#e06618"})
         points.loc[points["markerColor"] != "H", "markerColor"] = "#567282"
-        points["scale"] = 1.1
         
+        # Pull the line shapefile out of this zip file.
+        # This is what makes the "historical path" dotted line on the Datawrapper chart.
         line = self.__get_shapefile(best_track_zip, "lin.shp$")
         
+        # Set some attributes that are required by the data() method for areas that will eventually be called on this dataset.
         line["stroke"] = "#000000"
         line["type"] = "area"
         line["stroke-dasharray"] = "1,2.2"
@@ -811,7 +824,15 @@ class StormMap(Map):
         
         line = line.dissolve(by='STORMNUM')
         
-        return pd.concat([line])
+        df = pd.concat([line])
+        
+        # This bit of code standardizes the storm classifcations into a style that Datawrapper can use (single letters, not two).
+        # df["STORMTYPE"] = (df["STORMTYPE"]
+        #                     .replace({"TS": "S", "HU": "H", "TD": "D"})
+        #                     .loc[df["STORMTYPE"].isin(["D", "H", "S"]), :]
+        #                     )
+        
+        return df
     
     # This method is a custom version of Map's data() method, which is then called after calling this.
     def data(self):
@@ -834,6 +855,7 @@ class StormMap(Map):
         self.storm_type = metadata.at[0, "type"]
         
         # Pull in data from NOAA five day forecast shapefile.
+        # This is where we get the centre line, probable path cone shape, and points in probable path.
         five_day_latest_filename = f"https://www.nhc.noaa.gov/gis/forecast/archive/{self.storm_id}_5day_latest.zip"
         
         # Get points layer from five day forecast shapefile.
@@ -844,72 +866,75 @@ class StormMap(Map):
         points["latitude"] = points["geometry"].y.astype(float)
         points = points.drop(columns=["geometry"])
         
-        points["DATELBL"] = pd.to_datetime(points["DATELBL"]).apply(lambda x: x.tz_localize("America/Chicago"))
-        points["DATELBL"] = points["DATELBL"].dt.tz_convert('US/Eastern')
+        # Define necessary info for point markers.
         points["type"] = "point"
-        points["icon"] = "circle"
-        points["fill"] = "#C42127"
-        points["title"] = points['DATELBL'].dt.strftime("%b %e") + "<br>" + points['DATELBL'].dt.strftime("%I:%M %p")
-        points["title"] = points["title"].str.replace("<br>0", "<br>")
-        points["scale"] = 1.1
+        
+        # String together a title from information in each row.
+        points['DATELBL'] = pd.to_datetime(points['DATELBL'])
+        points["title"] = points['DATELBL'].dt.strftime("%A %e") + "<br>" + points['DATELBL'].dt.strftime("%I:%M %p").replace("<br>0", "<br>")
+        
+        # Marker symbols are the little letters in each point marker.
         points["markerSymbol"] = points["DVLBL"]
+        
+        # Define colors based on the letters we use to mark each point.
         points["markerColor"] = points["markerSymbol"].replace({"D": "#567282", "S": "#567282", "H": "#e06618"})
         
+        # Define a written out version of what kind of storm it is at each point for use in the tooltip.
         points.loc[points["DVLBL"] == "D", "storm_type"] = "Depression"
         points.loc[points["DVLBL"] == "H", "storm_type"] = "Hurricane"
         points.loc[points["DVLBL"] == "S", "storm_type"] = "Storm"
         
-        points["tooltip"] = "On " + points['DATELBL'].dt.strftime("%b %e") + " at " + points['DATELBL'].dt.strftime("%I:%M %p").str.replace("$0", "", regex=True) + " EST, the storm is projected to be classified as a " + points["storm_type"].str.lower() + "."
-        points["tooltip"] = points["tooltip"].str.replace(" 0", " ")
+        # Put together the tooltip for each map point.
+        points["tooltip"] = "On " + points['DATELBL'].dt.strftime("%b %e") + " at " + points['DATELBL'].dt.strftime("%I:%M %p").str.replace(" 0", "", regex=True) + " EST, the storm is projected to be classified as a " + points["storm_type"].str.lower() + "."
         
         # Get center line layer from five day forecast shapefile.
         centre_line = self.__get_shapefile(five_day_latest_filename, "5day_lin.shp$")
         
         # Define properties unique to centre line.
         centre_line["stroke"] = "#000000"
-        centre_line["fill-opacity"] = 0.0
-        centre_line["stroke-opacity"] = 0.5
-        centre_line["type"] = "area"
+        centre_line["fill"] = False
+        centre_line["title"] = "Probable path centre line"
         
         # Get probable path layer from five day forecast shapefile.
+        # This layer is the cone that shows where the storm may move next.
         probable_path = self.__get_shapefile(five_day_latest_filename, "5day_pgn.shp$")
         
         # Define properties unique to probable path shape.
         probable_path["fill"] = "#6a3d99"
-        probable_path["stroke"] = "#6a3d99"
-        probable_path["markerColor"] = "#6a3d99"
+        probable_path["stroke"] = False
         probable_path["fill-opacity"] = 0.3
-        probable_path["stroke-opacity"] = 0.0
         probable_path["title"] = "Probable path"
         
-        # Define some common style points for the centre line and the probable path.
-        for df in [centre_line, probable_path]:
-        
-            df["type"] = "area"
-            df["icon"] = "area"
-        
         # Call the method that returns our total path information. This holds historical info about where the hurricane has been.
-        total_path = self.__total_path(storm_id=self.storm_id)
+        # TODO add point information back into historical path?
+        # total_path = self.__total_path(storm_id=self.storm_id)
         
-        # Concatenate all our dataframes into one large dataframe so we can upload it.
-        all_shapes = pd.concat([centre_line, probable_path, points, total_path])
+        # Get the best track zipfile that contains the shapefile about the historical path of the storm.
+        best_track_zip = f"https://www.nhc.noaa.gov/gis/best_track/{self.storm_id}_best_track.zip"
+        historical_path = self.__get_shapefile(best_track_zip, "lin.shp$")
         
-        # Filter out all the columsn we don't care about keeping.
-        # TODO remove this, as the new data() method should be able to do this without specifying.
-        all_shapes = all_shapes[["markerColor", "fill", "fill-opacity", "stroke", "stroke-opacity", "type", "icon", "latitude", "longitude", "geometry", "title", "tooltip", "scale", "markerSymbol", "stroke-dasharray"]]
+        # Set some attributes that are required by the data() method for areas that will eventually be called on this dataset.
+        historical_path["stroke"] = "#000000"
+        historical_path["stroke-dasharray"] = "1,2.2"
+        historical_path["fill"] = False
         
+        # Dissolve several features of this line into one long line, as the individual segments are not of interest to us.
+        historical_path = historical_path.dissolve(by='STORMNUM')
         
-        # Fill any null values in latitude and longitude columns.
-        # TODO do we need these fillna lines?
-        all_shapes["latitude"] = all_shapes["latitude"].fillna("")
-        all_shapes["longitude"] = all_shapes["longitude"].fillna("")
-          
-        # I've commented the next line out because I don't think I need it with the new data() method structure.  
-        # all_shapes["stroke-dasharray"] = all_shapes["stroke-dasharray"].fillna("100000")
+        # Concatenate all our area markers together so we can define some common characteristics.
+        shapes = pd.concat([centre_line, probable_path, historical_path])
+        
+        # Define some common style points for the centre line and the probable path.
+        shapes["icon"] = "area"
+        shapes["type"] = "area"
+        
+        # Concatenate areas and points into one large dataframe so we can upload it.
+        markers = pd.concat([shapes, points])
 
         # Save as the object's dataset.
-        self.dataset = all_shapes
-        self.dataset.to_clipboard()
+        self.dataset = markers
+        
+        print(self.dataset)
         
         # Pass the dataset we've just prepped into the super's data method.
         return super(self.__class__, self).data(self.dataset)
