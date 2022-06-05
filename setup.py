@@ -23,5 +23,4 @@ setup(
         'pytest-runner',
         "geojson"],
     test_suite='tests',
-    filterwarnings='ignore::DeprecationWarning',
 )

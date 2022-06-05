@@ -16,7 +16,7 @@ EASTERN_UKRAINE_CHART_ID = "ioEie"
 API_TEST_FOLDER = "105625"
 
 
-test_map_data = pd.DataFrame({"title": ["Point 1"], "latitude": [50.2373819], "longitude": [-90.708556], "anchor": ["middle-right"], "tooltip": ["A test tooltip."], "icon": ["attention"]})
+test_map_data = pd.DataFrame({"title": ["Point 1"], "latitude": [50.2373819], "longitude": [-90.708556], "anchor": ["middle-right"], "tooltip": ["A test tooltip."], "icon": ["attention"], "type": ["point"]})
 
 test_chart_data = pd.DataFrame({"date": pd.date_range("2022-01-01", "2022-06-02")[:50], "value": numpy.random.randint(1, 20, 50)})
 
@@ -53,6 +53,12 @@ def test_simple_map():
         .deck(f"A test deck.")
         .move(folder_id=API_TEST_FOLDER)
     )
+    
+    
+def test_get_metadata():
+    chart = datawrappergraphics.Map(chart_id=TEST_MAP_ID)
+    print(chart.metadata)
+    assert chart
 
 
 
@@ -192,21 +198,22 @@ def test_ukraine_map():
     
 
 
-# # A note that this test will work only until the storm ID is relevant. The data disappears once the storm has passed.
-# def test_hurricane_map():
+# A note that this test will work only until the storm ID is relevant. The data disappears once the storm has passed.
+def test_hurricane_map():
 
-#     hurricane_map = (datawrappergraphics.StormMap(chart_id=TEST_HURRICANE_MAP_ID, storm_id="AL012022", xml_url="https://www.nhc.noaa.gov/nhc_at1.xml")
-#                     .data()
-#                     )
+    hurricane_map = (datawrappergraphics.StormMap(chart_id=TEST_HURRICANE_MAP_ID, storm_id="AL012022", xml_url="https://www.nhc.noaa.gov/nhc_at1.xml")
+                    .data()
+                    )
     
-#     hurricane_map = (hurricane_map
-#                     .head(f"TEST: Tracking {hurricane_map.storm_type.lower()} {hurricane_map.storm_name}")
-#                     .deck(f"Windspeed is currently measured at <b>{hurricane_map.windspeed} km/h</b>.")
-#                     .footer(source="U.S. National Hurricane Center")
-#                     .publish()
-#                     .move(API_TEST_FOLDER))
+    hurricane_map = (hurricane_map
+                    .head(f"TEST: Tracking {hurricane_map.storm_type.lower()} {hurricane_map.storm_name}")
+                    .deck(f"Windspeed is currently measured at <b>{hurricane_map.windspeed} km/h</b>.")
+                    .footer(source="U.S. National Hurricane Center")
+                    .publish()
+                    .move(API_TEST_FOLDER))
     
-#     assert hurricane_map
+    assert hurricane_map
+
 
 
 
