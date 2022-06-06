@@ -7,6 +7,7 @@ import re
 import numpy
 import requests
 import json
+from datawrappergraphics.errors import *
 
 
 TEST_MAP_ID = "rCSft"
@@ -21,6 +22,16 @@ API_TEST_FOLDER = "105625"
 test_map_data = pd.DataFrame({"title": ["Point 1"], "latitude": [50.2373819], "longitude": [-90.708556], "anchor": ["middle-right"], "tooltip": ["A test tooltip."], "icon": ["attention"], "type": ["point"]})
 
 test_chart_data = pd.DataFrame({"date": pd.date_range("2022-01-01", "2022-06-02")[:50], "value": numpy.random.randint(1, 20, 50)})
+
+
+def test_wrong_hexcode():
+    data = test_map_data.copy()
+    data["fill"] = "a color!"
+    data["type"] = "point"
+    
+    
+    try: datawrappergraphics.Map(chart_id=TEST_MAP_ID).data(data)
+    except InvalidHexcodeError: assert True
 
 
 # def test_create_chart():

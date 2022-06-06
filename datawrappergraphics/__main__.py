@@ -2,17 +2,18 @@ import requests
 import json
 import os
 import sys
+import re
 import pandas as pd
 import geopandas
 import datetime
 import logging
 import urllib.error
-import numpy
-from geojson import Feature, Point
+from geojson import Feature
 from io import BytesIO
 from zipfile import ZipFile
 from urllib.request import urlopen
 from datawrappergraphics.icons import dw_icons
+from datawrappergraphics.errors import *
 
 
 # There are two opens when creating a new DatawrapperGraphic object:
@@ -48,7 +49,11 @@ class DatawrapperGraphic:
     # Name of the script currently running using this module.
     global script_name
     
-    def __init__(self, chart_id: str = None, copy_id: str = None, auth_token: str = None, folder_id: str = None):
+    def __init__(self,
+                 chart_id: str = None,
+                 copy_id: str = None,
+                 auth_token: str = None,
+                 folder_id: str = None):
         
         # Set OS name (see global DatawrapperGraphic variables)
         self.os_name = os.name
@@ -71,7 +76,7 @@ class DatawrapperGraphic:
         # If no chart ID is passed, and no copy id is passed, we create a new chart from scratch.
         if chart_id == None and copy_id == None:
             
-            print(f"No chart specified. Creating new chart...")
+            logging.info(f"No chart specified. Creating new chart...")
             
             # If a folder is specified in which to create the chart, handle that here.
             if folder_id:
@@ -84,19 +89,19 @@ class DatawrapperGraphic:
             response = requests.post(f"https://api.datawrapper.de/v3/charts/", json=payload, headers=headers)
             chart_id = response.json()["publicId"]
 
-            print(f"New chart created with id {chart_id}")
+            logging.info(f"New chart created with id {chart_id}")
             
             self.CHART_ID = chart_id
         
         # If we want to make a copy of a graphic to create the new graphic.    
         elif chart_id == None and copy_id != None:
             
-            print(f"No chart specified. Copying chart with ID: {copy_id}...")
+            logging.info(f"No chart specified. Copying chart with ID: {copy_id}...")
             
             response = requests.post(f"https://api.datawrapper.de/v3/charts/{copy_id}/copy", headers=headers)
             chart_id = response.json()["publicId"]
             
-            print(f"New chart ({chart_id}) created as a copy of {copy_id}.")
+            logging.info(f"New chart ({chart_id}) created as a copy of {copy_id}.")
             
             self.CHART_ID = chart_id
             
@@ -247,7 +252,7 @@ class DatawrapperGraphic:
         
         self.metadata = r.json()
         
-        if r.ok: print(f"SUCCESS: Metadata updated.")
+        if r.ok: logging.info(f"SUCCESS: Metadata updated.")
         else: raise Exception(f"Couldn't update metadata. Response: {r.reason}")
         
         return self
@@ -273,7 +278,7 @@ class DatawrapperGraphic:
         
         r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=data)
         
-        if r.ok: print(f"SUCCESS: Chart head added.")
+        if r.ok: logging.info(f"SUCCESS: Chart head added.")
         else: raise Exception(f"ERROR: Chart head was not added. Response: {r.text}")
         
         return self
@@ -303,7 +308,7 @@ class DatawrapperGraphic:
         
         r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=json.dumps(payload))
         
-        if r.ok: print(f"SUCCESS: Chart deck added.")
+        if r.ok: logging.info(f"SUCCESS: Chart deck added.")
         else: raise Exception(f"ERROR: Chart deck was not added. Response: {r.text}")
         
         # Update the object's metadat representation.
@@ -357,7 +362,7 @@ class DatawrapperGraphic:
         # Make the HTTP request to update metadata.
         r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=json.dumps(data))
         
-        if r.ok: print(f"SUCCESS: Chart footer (byline, notes, and source) built and added.")
+        if r.ok: logging.info(f"SUCCESS: Chart footer (byline, notes, and source) built and added.")
         else: raise Exception(f"ERROR: Couldn't build chart footer. Response: {r.reason}")
         
         # Update the object's metadat representation.
@@ -382,7 +387,7 @@ class DatawrapperGraphic:
 
         r = requests.post(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/publish", headers=headers)
         
-        if r.ok: print(f"SUCCESS: Chart published!")
+        if r.ok: logging.info(f"SUCCESS: Chart published!")
         else: raise Exception(f"ERROR: Chart couldn't be published. Response: {r.reason}")
         
         return self
@@ -430,7 +435,7 @@ class DatawrapperGraphic:
 
         r = requests.patch(f"https://api.datawrapper.de/v3/charts", json=payload, headers=headers)
         
-        if r.ok: print(f"SUCCESS: Chart moved to folder ID {folder_id}!")
+        if r.ok: logging.info(f"SUCCESS: Chart moved to folder ID {folder_id}!")
         else: raise Exception(f"ERROR: Chart couldn't be moved. Response: {r.reason}")
         
         return self
@@ -451,7 +456,7 @@ class DatawrapperGraphic:
 
         r = requests.delete(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers)
         
-        if r.ok: print(f"SUCCESS: Chart published!")
+        if r.ok: logging.info(f"SUCCESS: Chart published!")
         else: raise Exception(f"ERROR: Chart couldn't be deleted. Response: {r.reason}")
         
         return self
@@ -472,7 +477,7 @@ class DatawrapperGraphic:
             
         
         if export_chart_response.ok:
-            print(f"SUCCESS: Chart with ID {self.CHART_ID} exported and saved!")
+            logging.info(f"SUCCESS: Chart with ID {self.CHART_ID} exported and saved!")
             
             with open(file_path, "wb") as response:
                 response.write(export_chart_response.content)
@@ -487,7 +492,10 @@ class Chart(DatawrapperGraphic):
     
     script_name = os.path.basename(sys.argv[0]).replace(".py", "").replace("script-", "")
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self,
+                 *args,
+                 **kwargs
+                 ):
         
         super(Chart, self).__init__(*args, **kwargs)
     
@@ -503,7 +511,7 @@ class Chart(DatawrapperGraphic):
         
         r = requests.put(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers, data=payload)
 
-        if r.ok: print(f"SUCCESS: Data added to chart.")
+        if r.ok: logging.info(f"SUCCESS: Data added to chart.")
         else: raise Exception(f"Chart data couldn't be added. Response: {r.reason}")
         
         return self
@@ -520,11 +528,24 @@ class Map(DatawrapperGraphic):
     global script_name
     global icon_list
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self,
+                 *args,
+                 **kwargs
+                 ):
         super(Map, self).__init__(*args, **kwargs)
         
         self.icon_list = dw_icons
      
+     
+     
+     
+    # Check markerColor to make sure it's a valid hex code.
+    def _check_if_valid_hexcode(self, string):
+        match = re.search("#[A-Za-z0-9]{6}", string)
+        if match is None:
+            return False
+        else:
+            return True
      
      
      
@@ -533,32 +554,46 @@ class Map(DatawrapperGraphic):
     # This method handles the majority of the heavy lifting for map data.
     # In essence, it converts either a pd.DataFrame or a geopandas.GeoDataFrame to a GEOJson object, then
     # replaces values in a template with custom values specified in the dataframe.
-    def data(self, input_data: pd.DataFrame | geopandas.GeoDataFrame, append: str = None):
-        
-        # Define a list of marker types that are allowed.
-        allowed_marker_type_list = ["point", "area"]
-        
-        # Define a list of icon types that are allowed (ie those that are defined in the icons.py file.)
-        allowed_icon_list = [key for key, value in self.icon_list.items()]
-        
-        # Append "area" to this list. These icons are handled a bit differently so there is no icon defined for them.
-        allowed_icon_list.append("area")
+    def data(self,
+             input_data: pd.DataFrame | geopandas.GeoDataFrame,
+             append: str = None):
         
         # New list for storing the altered geojson.
         new_features = []
         
+        # If the input data is a GeoDataFrame (rather than a pandas DataFrame), then change the CRS.
         if isinstance(input_data, geopandas.GeoDataFrame):
             input_data = input_data.to_crs("EPSG:4326")
         
+        # Define a list of marker values that are allowed for various marker properties.
+        ALLOWED_VALUES = {
+            "marker": ["point", "area"],
+            "anchor": ["middle-left", "middle-center", "middle-right", "bottom-left", "bottom-center", "bottom-right", "top-left", "top-center", "top-right"],
+            "icon": [key for key, value in self.icon_list.items()]
+        }
+        
+        # This loops through each row in the dataframe that was input and turns it into the properly formatted JSON object.
         for i, feature in input_data.iterrows():
             
-            # Check if a marker type is specified. If it's not, we'll try to infer the type based on the presence of lat/lng columns or geometry columns (area columns have geometry
-            # point columns have lat/lng.
-            marker_type = feature["type"]
+            # Check if a marker type is specified. Throw an error if it's not provided.
+            try: marker_type = feature["type"]
+            except: raise Exception(f"Please specify a marker type for all rows in your Dataframe.")
             
-            # Check to make sure the marker type we specified is in the list of allowed marker types.
-            if marker_type not in allowed_marker_type_list:
-                raise Exception(f"It looks like you haven't provided a valid marker type. Please ensure the value is one of: {', '.join(allowed_marker_type_list)}.")
+            # Check to make sure values that have an allowed list above are correctly entered, and throw an error if they're not.
+            for marker_property, _list in ALLOWED_VALUES.items():
+                if marker_property in feature and not pd.isna(feature[marker_property]) and feature[marker_property] not in _list:
+                    raise InvalidMarkerDataError(marker_property, feature[marker_property], _list)
+            
+            for property in ["markerColor", "fill", "stroke", "markerTextColor"]:
+                
+                if property in feature and not pd.isna(feature[property]):
+                    is_hexcode = self._check_if_valid_hexcode(str(feature[property]))
+                    
+                    if property in ["fill", "stroke"] and not is_hexcode and not isinstance(feature[property], bool):
+                        raise InvalidHexcodeError()
+                    elif property not in ["fill", "stroke"] and not is_hexcode:
+                        raise InvalidHexcodeError()
+        
             
             # Load the template feature object depending on the type of each marker (area or point). Throw an error if the file can't be found.
             if marker_type == "point":
@@ -696,7 +731,7 @@ class Map(DatawrapperGraphic):
         headers = {"Authorization": f"Bearer {self.DW_AUTH_TOKEN}"}
         r = requests.put(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers, data=payload)
 
-        if r.ok: print(f"SUCCESS: Data added to chart.")
+        if r.ok: logging.info(f"SUCCESS: Data added to chart.")
         else: raise Exception(f"ERROR: Chart data couldn't be added. Response: {r.reason}")
         
         return self
@@ -871,13 +906,16 @@ class StormMap(Map):
         
         # String together a title from information in each row.
         points['DATELBL'] = pd.to_datetime(points['DATELBL'])
-        points["title"] = points['DATELBL'].dt.strftime("%A %e") + "<br>" + points['DATELBL'].dt.strftime("%I:%M %p").replace("<br>0", "<br>")
+        points["title"] = points['DATELBL'].dt.strftime("%A") + "<br>" + points['DATELBL'].dt.strftime("%I:%M %p").replace("<br>0", "<br>")
         
         # Marker symbols are the little letters in each point marker.
         points["markerSymbol"] = points["DVLBL"]
         
         # Define colors based on the letters we use to mark each point.
         points["markerColor"] = points["markerSymbol"].replace({"D": "#567282", "S": "#567282", "H": "#e06618"})
+        
+        # Define label anchors.
+        points["anchor"] = "middle-left"
         
         # Define a written out version of what kind of storm it is at each point for use in the tooltip.
         points.loc[points["DVLBL"] == "D", "storm_type"] = "Depression"
@@ -933,8 +971,6 @@ class StormMap(Map):
 
         # Save as the object's dataset.
         self.dataset = markers
-        
-        print(self.dataset)
         
         # Pass the dataset we've just prepped into the super's data method.
         return super(self.__class__, self).data(self.dataset)
