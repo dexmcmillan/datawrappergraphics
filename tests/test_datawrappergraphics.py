@@ -7,7 +7,9 @@ import re
 import numpy
 import requests
 import json
+import logging
 from datawrappergraphics.errors import *
+import pytest
 
 
 TEST_MAP_ID = "rCSft"
@@ -45,7 +47,7 @@ def test_wrong_hexcode():
     
     
     
-
+@pytest.mark.quick
 def test_simple_chart():
     
     assert (datawrappergraphics.Chart(chart_id=TEST_CHART_ID)
@@ -57,7 +59,7 @@ def test_simple_chart():
     )
 
 
-
+@pytest.mark.quick
 def test_simple_map():
     
     assert (datawrappergraphics.Map(chart_id=TEST_MAP_ID)
@@ -66,11 +68,23 @@ def test_simple_map():
         .deck(f"A test deck.")
         .move(folder_id=API_TEST_FOLDER)
     )
-    
-    
-def test_get_metadata():
+
+# This test changes the metadata in a test chart and update the live chart.
+@pytest.mark.quick
+def test_metadata():
     chart = datawrappergraphics.Map(chart_id=TEST_MAP_ID)
-    assert chart
+    
+    before = chart.metadata["metadata"]["describe"]["source-name"]
+    
+    chart.metadata["metadata"]["describe"]["source-name"] = "".join([str(x) for x in numpy.random.randint(0, 9, 5)])
+    
+    chart.set_metadata()
+    
+    after = chart.metadata["metadata"]["describe"]["source-name"]
+    
+    logging.info(f"Before: {before}. After: {after}")
+    
+    assert before != after
 
 
 

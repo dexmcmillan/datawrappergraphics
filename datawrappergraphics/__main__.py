@@ -16,17 +16,20 @@ from datawrappergraphics.icons import dw_icons
 from datawrappergraphics.errors import *
 
 
-# There are two opens when creating a new DatawrapperGraphic object:
-    # 
-    #   1. You can create a brand new chart by specifying no chart_id and no copy_id. This is not recommended but can be used to create a large number of charts en-mass,
-    #   and then save their info into a csv or something.
-    # 
-    #   2. You can specify a copy_id, and a new chart will be created by copying that chart. This is also not recommended but can be used for various purposes.
-    #
-    #   3. You can specify a chart that is already made that you want to update. This is the easiest way - copy another chart in the Datawrapper app and then
-    #   use that chart_id.
 
 class DatawrapperGraphic:
+    
+    """
+    There are two opens when creating a new DatawrapperGraphic object:
+        
+        1. You can create a brand new chart by specifying no chart_id and no copy_id. This is not recommended but can be used to create a large number of charts en-mass,
+        and then save their info into a csv or something.
+        
+        2. You can specify a copy_id, and a new chart will be created by copying that chart. This is also not recommended but can be used for various purposes.
+        
+        3. You can specify a chart that is already made that you want to update. This is the easiest way - copy another chart in the Datawrapper app and then
+        use that chart_id.
+    """
     
     # The CHART_ID is a unique ID that can be taken from the URL of datawrappers. It's required to use the DW api.
     global CHART_ID
@@ -114,14 +117,21 @@ class DatawrapperGraphic:
         elif chart_id != None and copy_id != None:
             raise Exception(f"Please specify either a chart_id or a copy_id, but not both.")
         
-        self.metadata = self.get_metadata()
+        self.metadata = self._get_metadata()
 
     
     
     
+        
     
-    
-    def get_metadata(self):
+    def _get_metadata(self):
+        
+        """
+        This method is used on init to collect all the data (not just what's in the metadata object, but ALL the data from the chart)
+        into in the object for reference in the metadata property.
+        
+        Note that it will not (as of yet) update on the live chart until you call set_metadata().
+        """
         
         headers = {
             "Accept": "*/*",
@@ -143,10 +153,16 @@ class DatawrapperGraphic:
     
     
     
-    def set_metadata(self, metadata: dict = None):
+    def set_metadata(self):
         
-        if metadata is None:
-            metadata = self.metadata
+        """A method that sends the metadata stored in the DatawrapperGraphics object to
+            the live chart on Datawrapper.
+
+        Args: None
+
+        Returns:
+            object: Returns self, the instance of the DatawrapperGraphics class. Can be chained with other methods.
+        """
         
         headers = {
             "Accept": "*/*",
@@ -248,7 +264,7 @@ class DatawrapperGraphic:
                        }
         }
 
-        r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=json.dumps(metadata))
+        r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=json.dumps(self.metadata))
         
         self.metadata = r.json()
         
@@ -264,6 +280,15 @@ class DatawrapperGraphic:
     
     # Add the chart's headline.
     def head(self, string: str):
+        
+        """Updates the title -- or headline -- of your graphic.
+
+        Args:
+            string (str): The headline for your chart.
+
+        Returns:
+            object: Returns self, the instance of the DatawrapperGraphics class. Can be chained with other methods.
+        """
     
         # Define headers for headline upload.
         headers = {
@@ -292,6 +317,15 @@ class DatawrapperGraphic:
 
     
     def deck(self, deck: str):
+        
+        """Updates the deck -- or subheader -- of your graphic.
+
+        Args:
+            string (str): The subhead for your chart.
+
+        Returns:
+            object: Returns self, the instance of the DatawrapperGraphics class. Can be chained with other methods.
+        """
         
         headers = {
             "Accept": "*/*", 
@@ -327,6 +361,18 @@ class DatawrapperGraphic:
     ## Adds a timestamp to the "notes" section of your chart. Also allows for an additional note string that will be added before the timestamp.
     
     def footer(self, source: str = None, byline:str = "Dexter McMillan", note: str = "", timestamp: bool = True):
+        
+        """Updates the footer info of your graphic.
+
+        Args:
+            source (str): The graphic's source.
+            byline (str): The graphic's byline.
+            note (str): The graphic's note (showing at the bottom of the graphic).
+            timestamp (bool): Whether a timestamp should be included or not. Timestamps are added right after whatever you specify as the note.
+
+        Returns:
+            object: Returns self, the instance of the DatawrapperGraphics class. Can be chained with other methods.
+        """
         
         today = datetime.datetime.today()
         
