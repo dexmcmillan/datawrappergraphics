@@ -9,3 +9,4 @@ except PackageNotFoundError:
     __version__ = "unknown"
 
 from .__main__ import *
+from datawrappergraphics.errors import *

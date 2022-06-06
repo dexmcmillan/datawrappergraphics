@@ -2,29 +2,34 @@ import requests
 import json
 import os
 import sys
+import re
 import pandas as pd
 import geopandas
 import datetime
 import logging
 import urllib.error
-import pytz
+from geojson import Feature
 from io import BytesIO
 from zipfile import ZipFile
 from urllib.request import urlopen
 from datawrappergraphics.icons import dw_icons
+from datawrappergraphics.errors import *
 
 
-# There are two opens when creating a new DatawrapperGraphic object:
-    # 
-    #   1. You can create a brand new chart by specifying no chart_id and no copy_id. This is not recommended but can be used to create a large number of charts en-mass,
-    #   and then save their info into a csv or something.
-    # 
-    #   2. You can specify a copy_id, and a new chart will be created by copying that chart. This is also not recommended but can be used for various purposes.
-    #
-    #   3. You can specify a chart that is already made that you want to update. This is the easiest way - copy another chart in the Datawrapper app and then
-    #   use that chart_id.
 
 class DatawrapperGraphic:
+    
+    """
+    There are two opens when creating a new DatawrapperGraphic object:
+        
+        1. You can create a brand new chart by specifying no chart_id and no copy_id. This is not recommended but can be used to create a large number of charts en-mass,
+        and then save their info into a csv or something.
+        
+        2. You can specify a copy_id, and a new chart will be created by copying that chart. This is also not recommended but can be used for various purposes.
+        
+        3. You can specify a chart that is already made that you want to update. This is the easiest way - copy another chart in the Datawrapper app and then
+        use that chart_id.
+    """
     
     # The CHART_ID is a unique ID that can be taken from the URL of datawrappers. It's required to use the DW api.
     global CHART_ID
@@ -47,7 +52,14 @@ class DatawrapperGraphic:
     # Name of the script currently running using this module.
     global script_name
     
-    def __init__(self, chart_id: str = None, copy_id: str = None, auth_token: str = None, folder_id: str = None):
+    def __init__(self,
+                 chart_id: str = None,
+                 copy_id: str = None,
+                 auth_token: str = None,
+                 folder_id: str = None):
+        
+        # Turn on logging of INFO level.
+        logging.basicConfig(level=logging.INFO)
         
         # Set OS name (see global DatawrapperGraphic variables)
         self.os_name = os.name
@@ -57,6 +69,8 @@ class DatawrapperGraphic:
         self.path = os.path.dirname(sys.argv[0]) 
         
         self.auth(token=auth_token)
+        
+        
         
         # Define common headers for all the below options for instantiating Datawrapper graphics.
         headers = {
@@ -68,7 +82,7 @@ class DatawrapperGraphic:
         # If no chart ID is passed, and no copy id is passed, we create a new chart from scratch.
         if chart_id == None and copy_id == None:
             
-            print(f"No chart specified. Creating new chart...")
+            logging.info(f"No chart specified. Creating new chart...")
             
             # If a folder is specified in which to create the chart, handle that here.
             if folder_id:
@@ -81,19 +95,19 @@ class DatawrapperGraphic:
             response = requests.post(f"https://api.datawrapper.de/v3/charts/", json=payload, headers=headers)
             chart_id = response.json()["publicId"]
 
-            print(f"New chart created with id {chart_id}")
+            logging.info(f"New chart created with id {chart_id}")
             
             self.CHART_ID = chart_id
         
         # If we want to make a copy of a graphic to create the new graphic.    
         elif chart_id == None and copy_id != None:
             
-            print(f"No chart specified. Copying chart with ID: {copy_id}...")
+            logging.info(f"No chart specified. Copying chart with ID: {copy_id}...")
             
             response = requests.post(f"https://api.datawrapper.de/v3/charts/{copy_id}/copy", headers=headers)
             chart_id = response.json()["publicId"]
             
-            print(f"New chart ({chart_id}) created as a copy of {copy_id}.")
+            logging.info(f"New chart ({chart_id}) created as a copy of {copy_id}.")
             
             self.CHART_ID = chart_id
             
@@ -106,31 +120,158 @@ class DatawrapperGraphic:
         elif chart_id != None and copy_id != None:
             raise Exception(f"Please specify either a chart_id or a copy_id, but not both.")
         
-        response = requests.get(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers)
-        
-        
-        self.metadata = response.json()
+        self.metadata = self._get_metadata()
 
     
     
     
+        
     
-    
-    
-    
-    
-    
-    def settings(self):
+    def _get_metadata(self):
+        
+        """
+        This method is used on init to collect all the data (not just what's in the metadata object, but ALL the data from the chart)
+        into in the object for reference in the metadata property.
+        
+        Note that it will not (as of yet) update on the live chart until you call set_metadata().
+        """
         
         headers = {
             "Accept": "*/*",
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
         }
+        
+        r = requests.get(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers)
+        
+        metadata = r.json()
+        
+        if r.ok: return metadata
+        else: raise Exception(f"Couldn't update metadata. Response: {r.reason}")
+        
+        
+    
+    
+    
+    
+    
+    
+    def set_metadata(self):
+        
+        """A method that sends the metadata stored in the DatawrapperGraphics object to
+            the live chart on Datawrapper.
+
+        Args: None
+
+        Returns:
+            object: Returns self, the instance of the DatawrapperGraphics class. Can be chained with other methods.
+        """
+        
+        headers = {
+            "Accept": "*/*",
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
+        }
+        
+        template = {'thumbnails': {
+                'full': '//img.datawrapper.de/nSHo0/b31913d1ae7339725e20821d825ef7f5/full.png',
+                'plain': '//img.datawrapper.de/nSHo0/b31913d1ae7339725e20821d825ef7f5/plain.png'},
+               'publicId': 'nSHo0',
+               'language': 'en-US',
+               'theme': 'cbc',
+               'authorId': 282719,
+               'createdAt':'2022-05-30T17:04:21.000Z',
+               'externalData': None,
+               'forkable': False,
+               'forkedFrom': '83uUC',
+               'id': 'nSHo0',
+               'isFork': False,
+               'lastEditStep': 5,
+               'lastModifiedAt': '2022-06-05T14:16:31.000Z',
+               'metadata': {
+                   'data': {
+                       'transpose': False,
+                       'vertical-header': True,
+                       'horizontal-header': True,
+                       'json': True
+                       },
+                   'describe': {
+                       'source-name': 'U.S. National Hurricane Center',
+                       'source-url': '',
+                       'intro': 'Windspeed is currently measured at <b>96 km/h</b>.',
+                       'byline': 'Dexter McMillan',
+                       'aria-description': '',
+                       'number-format': '-',
+                       'number-divisor': 0,
+                       'number-append': '',
+                       'number-prepend': ''
+                       },
+                   'visualize': {
+                       'highlighted-series': [],
+                       'highlighted-values': [],
+                       'view': {
+                           'fit': {
+                               'top': [-67.98585335442425, 50.960484198569304],
+                               'left': [-102.04827196201292, 32.34364955620653],
+                               'right': [-33.923434746835596, 32.34364955620653],
+                               'bottom': [-67.98585335442425, 8.97056056217815]
+                               },
+                           'zoom': 3.5,
+                           'pitch': 0,
+                           'center': [-67.98585335442522, 32.34364955620599],
+                           'height': 74, 'bearing': 0
+                           },
+                       'scale': False,
+                       'style': 'dw-light',
+                       'locked': False,
+                       'upload': {
+                           'maxSize': 2000000, 'maxMarkers': 100
+                           },
+                       'x-grid': 'on',
+                       'compass': False,
+                       'markers': None,
+                       'sharing': {
+                           'auto': True, 'enabled': False
+                           },
+                       'mapLabel': True,
+                       '_last_tab': 'markers',
+                       'addRegion': False,
+                       'scaleUnit': 'metric',
+                       'publish': {
+                           'embed-width': 1096,
+                           'embed-height': 998,
+                            'embed-codes': {
+                                'embed-method-iframe': '<iframe title="TEST: Tracking tropical storm Alex" aria-label="Locator maps" id="datawrapper-chart-nSHo0" src="https://datawrapper.dwcdn.net/nSHo0/284/" scrolling="no" frameborder="0" style="border: none;" width="1096" height="998"></iframe>',
+                                'embed-method-responsive': '<iframe title="TEST: Tracking tropical storm Alex" aria-label="Locator maps" id="datawrapper-chart-nSHo0" src="https://datawrapper.dwcdn.net/nSHo0/284/" scrolling="no" frameborder="0" style="width: 0; min-width: 100% !important; border: none;" height="998"></iframe><script type="text/javascript">!function(){"use strict";window.addEventListener("message",(function(e){if(void 0!==e.data["datawrapper-height"]){var t=document.querySelectorAll("iframe");for(var a in e.data["datawrapper-height"])for(var r=0;r<t.length;r++){if(t[r].contentWindow===e.source)t[r].style.height=e.data["datawrapper-height"][a]+"px"}}}))}();\n</script>'
+                                }
+                            },
+                       'annotate': {
+                           'notes': 'Last updated on June 5, 2022 at 10:16 a.m.'
+                           },
+                       'custom': {},
+                       'json_error': None},
+                   'organizationId': 'cbc',
+                   'publicUrl': 'https://datawrapper.dwcdn.net/nSHo0/284/',
+                   'publicVersion': 284,
+                   'publishedAt': '2022-06-05T14:16:31.000Z',
+                   'title':
+                       'TEST: Tracking tropical storm Alex',
+                       'type': 'locator-map',
+                       'customFields': {},
+                       'folderId': 105625,
+                       'author': {
+                           'name': 'Dexter McMillan',
+                           'email': 'dexter.mcmillan@cbc.ca'
+                           },
+                       'url': '/v3/charts/nSHo0'
+                       }
+        }
 
         r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=json.dumps(self.metadata))
         
-        if r.ok: print(f"SUCCESS: Metadata updated.")
+        self.metadata = r.json()
+        
+        if r.ok: logging.info(f"SUCCESS: Metadata updated.")
         else: raise Exception(f"Couldn't update metadata. Response: {r.reason}")
         
         return self
@@ -142,6 +283,15 @@ class DatawrapperGraphic:
     
     # Add the chart's headline.
     def head(self, string: str):
+        
+        """Updates the title -- or headline -- of your graphic.
+
+        Args:
+            string (str): The headline for your chart.
+
+        Returns:
+            object: Returns self, the instance of the DatawrapperGraphics class. Can be chained with other methods.
+        """
     
         # Define headers for headline upload.
         headers = {
@@ -156,7 +306,7 @@ class DatawrapperGraphic:
         
         r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=data)
         
-        if r.ok: print(f"SUCCESS: Chart head added.")
+        if r.ok: logging.info(f"SUCCESS: Chart head added.")
         else: raise Exception(f"ERROR: Chart head was not added. Response: {r.text}")
         
         return self
@@ -170,6 +320,15 @@ class DatawrapperGraphic:
 
     
     def deck(self, deck: str):
+        
+        """Updates the deck -- or subheader -- of your graphic.
+
+        Args:
+            string (str): The subhead for your chart.
+
+        Returns:
+            object: Returns self, the instance of the DatawrapperGraphics class. Can be chained with other methods.
+        """
         
         headers = {
             "Accept": "*/*", 
@@ -186,7 +345,7 @@ class DatawrapperGraphic:
         
         r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=json.dumps(payload))
         
-        if r.ok: print(f"SUCCESS: Chart deck added.")
+        if r.ok: logging.info(f"SUCCESS: Chart deck added.")
         else: raise Exception(f"ERROR: Chart deck was not added. Response: {r.text}")
         
         # Update the object's metadat representation.
@@ -205,6 +364,18 @@ class DatawrapperGraphic:
     ## Adds a timestamp to the "notes" section of your chart. Also allows for an additional note string that will be added before the timestamp.
     
     def footer(self, source: str = None, byline:str = "Dexter McMillan", note: str = "", timestamp: bool = True):
+        
+        """Updates the footer info of your graphic.
+
+        Args:
+            source (str): The graphic's source.
+            byline (str): The graphic's byline.
+            note (str): The graphic's note (showing at the bottom of the graphic).
+            timestamp (bool): Whether a timestamp should be included or not. Timestamps are added right after whatever you specify as the note.
+
+        Returns:
+            object: Returns self, the instance of the DatawrapperGraphics class. Can be chained with other methods.
+        """
         
         today = datetime.datetime.today()
         
@@ -240,7 +411,7 @@ class DatawrapperGraphic:
         # Make the HTTP request to update metadata.
         r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=json.dumps(data))
         
-        if r.ok: print(f"SUCCESS: Chart footer (byline, notes, and source) built and added.")
+        if r.ok: logging.info(f"SUCCESS: Chart footer (byline, notes, and source) built and added.")
         else: raise Exception(f"ERROR: Couldn't build chart footer. Response: {r.reason}")
         
         # Update the object's metadat representation.
@@ -265,7 +436,7 @@ class DatawrapperGraphic:
 
         r = requests.post(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/publish", headers=headers)
         
-        if r.ok: print(f"SUCCESS: Chart published!")
+        if r.ok: logging.info(f"SUCCESS: Chart published!")
         else: raise Exception(f"ERROR: Chart couldn't be published. Response: {r.reason}")
         
         return self
@@ -313,7 +484,7 @@ class DatawrapperGraphic:
 
         r = requests.patch(f"https://api.datawrapper.de/v3/charts", json=payload, headers=headers)
         
-        if r.ok: print(f"SUCCESS: Chart moved to folder ID {folder_id}!")
+        if r.ok: logging.info(f"SUCCESS: Chart moved to folder ID {folder_id}!")
         else: raise Exception(f"ERROR: Chart couldn't be moved. Response: {r.reason}")
         
         return self
@@ -334,7 +505,7 @@ class DatawrapperGraphic:
 
         r = requests.delete(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers)
         
-        if r.ok: print(f"SUCCESS: Chart published!")
+        if r.ok: logging.info(f"SUCCESS: Chart published!")
         else: raise Exception(f"ERROR: Chart couldn't be deleted. Response: {r.reason}")
         
         return self
@@ -355,7 +526,7 @@ class DatawrapperGraphic:
             
         
         if export_chart_response.ok:
-            print(f"SUCCESS: Chart with ID {self.CHART_ID} exported and saved!")
+            logging.info(f"SUCCESS: Chart with ID {self.CHART_ID} exported and saved!")
             
             with open(file_path, "wb") as response:
                 response.write(export_chart_response.content)
@@ -370,7 +541,10 @@ class Chart(DatawrapperGraphic):
     
     script_name = os.path.basename(sys.argv[0]).replace(".py", "").replace("script-", "")
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self,
+                 *args,
+                 **kwargs
+                 ):
         
         super(Chart, self).__init__(*args, **kwargs)
     
@@ -386,7 +560,7 @@ class Chart(DatawrapperGraphic):
         
         r = requests.put(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers, data=payload)
 
-        if r.ok: print(f"SUCCESS: Data added to chart.")
+        if r.ok: logging.info(f"SUCCESS: Data added to chart.")
         else: raise Exception(f"Chart data couldn't be added. Response: {r.reason}")
         
         return self
@@ -403,48 +577,25 @@ class Map(DatawrapperGraphic):
     global script_name
     global icon_list
     
-    
-    
-    def __init__(self, *args, **kwargs):
+    def __init__(self,
+                 *args,
+                 **kwargs
+                 ):
         super(Map, self).__init__(*args, **kwargs)
         
         self.icon_list = dw_icons
-        
-     
-
-     
-     
-    ## This function converts a pandas dataframe into geojson if the data you're using doesn't import correctly into Geopandas.
-    def df_to_geojson(self, dframe: pd.DataFrame, lat: str = 'latitude', lon: str = 'longitude'):
-        
-        # create a new python dict to contain our geojson data, using geojson format
-        geojson = {'type':'FeatureCollection', 'features':[]}
-
-        # loop through each row in the dataframe and convert each row to geojson format
-        for _, row in dframe.iterrows():
-            
-            # create a feature template to fill in
-            feature = {'type':'Feature',
-                    'properties':{},
-                    'geometry':{'type':'Point',
-                                'coordinates':[]}}
-
-            # fill in the coordinates
-            feature['geometry']['coordinates'] = [row[lon],row[lat]]
-
-            # for each column, get the value and add it as a new feature property
-            for prop in dframe.columns:
-                feature['properties'][prop] = row[prop]
-            
-            # add this feature (aka, converted dataframe row) to the list of features inside our dict
-            geojson['features'].append(feature)
-        
-        return geojson
      
      
      
-
-        
+     
+    # Check markerColor to make sure it's a valid hex code.
+    def _check_if_valid_hexcode(self, string):
+        match = re.search("#[A-Za-z0-9]{6}", string)
+        if match is None:
+            return False
+        else:
+            return True
+     
      
      
      
@@ -452,155 +603,146 @@ class Map(DatawrapperGraphic):
     # This method handles the majority of the heavy lifting for map data.
     # In essence, it converts either a pd.DataFrame or a geopandas.GeoDataFrame to a GEOJson object, then
     # replaces values in a template with custom values specified in the dataframe.
-    def data(self, input_data: pd.DataFrame | geopandas.GeoDataFrame, append: str = None):
-        
-        # Define a list of marker types that are allowed.
-        allowed_marker_type_list = ["point", "area"]
-        
-        # Define a list of icon types that are allowed (ie those that are defined in the icons.py file.)
-        allowed_icon_list = [key for key, value in self.icon_list.items()]
-        # Append "area" to this list. These icons are handled a bit differently so there is no icon defined for them.
-        allowed_icon_list.append("area")
-        
-        # Create an id column that uses Datawrapper's ID naming convention.
-        input_data.loc[:, 'id'] = range(0, len(input_data))
-        input_data.loc[:, "id"] = input_data.loc[:, 'id'].apply(lambda x: f"m{x}")
-        
-        # Check if the data input is a pandas dataframe or a geopandas dataframe. if it's pandas, call df_to_geojson(). If not, convert crs and convert geopandas to json.
-        # The outcome of this if/else is a list of json objects that can be iterated through.
-        if not isinstance(input_data, geopandas.GeoDataFrame):
-            input_data = self.df_to_geojson(input_data)
-        else:
-            input_data = input_data.to_crs("EPSG:4326")
-            input_data = json.loads(input_data.to_json())
-        
-        # Get only the features from the object.
-        features = input_data["features"]
+    def data(self,
+             input_data: pd.DataFrame | geopandas.GeoDataFrame,
+             append: str = None):
         
         # New list for storing the altered geojson.
         new_features = []
         
-        for feature in features:
+        # If the input data is a GeoDataFrame (rather than a pandas DataFrame), then change the CRS.
+        if isinstance(input_data, geopandas.GeoDataFrame):
+            input_data = input_data.to_crs("EPSG:4326")
+        
+        # Define a list of marker values that are allowed for various marker properties.
+        ALLOWED_VALUES = {
+            "marker": ["point", "area"],
+            "anchor": ["middle-left", "middle-center", "middle-right", "bottom-left", "bottom-center", "bottom-right", "top-left", "top-center", "top-right"],
+            "icon": [key for key, value in self.icon_list.items()]
+        }
+        
+        # This loops through each row in the dataframe that was input and turns it into the properly formatted JSON object.
+        for i, feature in input_data.iterrows():
             
-            # Check if a marker type is specified. If it's not, we'll try to infer the type based on the presence of lat/lng columns or geometry columns (area columns have geometry
-            # point columns have lat/lng.
-            try: marker_type = feature["properties"]["type"]
-            except KeyError:
-                try:
-                    if feature["properties"]["latitude"] and feature["properties"]["longitude"]:
-                        marker_type = "point"
-                    else:
-                        marker_type = "area"
-                except KeyError: raise Exception(f"Marker type was not specified in your file, and there's no latitude/longitude or geometry column to infer marker type. Please add a column for these properties.")
+            # Check if a marker type is specified. Throw an error if it's not provided.
+            try: marker_type = feature["type"]
+            except: raise Exception(f"Please specify a marker type for all rows in your Dataframe.")
             
-            # Check to make sure the marker type we specified is in the list of allowed marker types.
-            if marker_type not in allowed_marker_type_list:
-                raise Exception(f"It looks like you haven't provided a valid marker type. Please ensure the value is one of: {', '.join(allowed_marker_type_list)}.")
+            # Check to make sure values that have an allowed list above are correctly entered, and throw an error if they're not.
+            for marker_property, _list in ALLOWED_VALUES.items():
+                if marker_property in feature and not pd.isna(feature[marker_property]) and feature[marker_property] not in _list:
+                    raise InvalidMarkerDataError(marker_property, feature[marker_property], _list)
             
-            # Check to see if an icon has been specified. If not, default to 'circle'.
-            try: icon = feature["properties"]['icon']
-            except KeyError:
-                if marker_type == "point":
-                    feature["properties"]["icon"] = "circle"
-                    icon = "circle"
-            
-            # Check to make sure the icon type we specified is in the list of allowed marker types.
-            if icon not in allowed_icon_list:
-                raise Exception(f"It looks like you haven't provided a valid icon type. Please ensure the value is one of: {', '.join(allowed_icon_list)}.")
+            for property in ["markerColor", "fill", "stroke", "markerTextColor"]:
+                
+                if property in feature and not pd.isna(feature[property]):
+                    is_hexcode = self._check_if_valid_hexcode(str(feature[property]))
+                    
+                    if property in ["fill", "stroke"] and not is_hexcode and not isinstance(feature[property], bool):
+                        raise InvalidHexcodeError()
+                    elif property not in ["fill", "stroke"] and not is_hexcode:
+                        raise InvalidHexcodeError()
+        
             
             # Load the template feature object depending on the type of each marker (area or point). Throw an error if the file can't be found.
-            
-            asset_path = f"{os.path.dirname(__file__)}/tests/assets"
-            
-            with open(f"{os.path.dirname(__file__)}/assets/{marker_type}.json", 'r') as f:
-                template = json.load(f)
-                print(template)
-                
-            # These properties have to be handled a little differently than just loop through and replace the values in the template with the new values provided.
-            exclusion_list = ["tooltip", "icon", "geometry", "fill", "stroke", "visibility", "visible"]
-
-            # This code loops through every value provided and replaces that value in the template we loaded above. If the value is not a str or an int, it won't include it.
-            new_feature = {k: feature["properties"][k] if (k in feature["properties"] and v is not None and k not in exclusion_list) else template[k] for k, v in template.items() if k not in exclusion_list and k is not None}
-            
-            # The visible property has to be handled a little differently because it is not nested in the properties object of the marker, it's in the first level.
-            first_level_properties = ["visible"]
-            
-            for prop in first_level_properties:
-                try: new_feature[prop] = feature[prop]
-                except: new_feature[prop] = template[prop]
-            
-            # This pulls the "visibility" values from whatever is specified for "visible". This means that currently, you can not disable
-            # anything from showing on mobile and desktop seperately.
-            # TODO implement separate control for visiblity on desktop and mobile. If values are not specified, use default values from template.
-            try: new_feature["visibility"] = {
-                    "desktop": feature["properties"]["visible"],
-                    "mobile": feature["properties"]["visible"],
-                }
-            except KeyError: new_feature["visibility"] = {
-                    "desktop": True,
-                    "mobile": True,
-                }
-            
-            # Some properties are different if our entry is a point rather than an area.
-            # Here we handle the points.
             if marker_type == "point":
                 
-                # Now we handle some of the outliers specified in the exclusion list.
-                # Tooltip has to be embedded in an object.
-                try: new_feature["tooltip"] = {"text": feature["properties"]["tooltip"]}
-                except: new_feature["tooltip"] = template["tooltip"]
-                
-                for prop in ["markerColor", "markerSymbol"]:
-                    try: new_feature[prop] = feature["properties"][prop]
-                    except KeyError: new_feature[prop] = template[prop]
-                
-                # Coordinates are provided for points by a latitude and a longitude column. They must be specified or an exception is thrown.
-                try: new_feature["coordinates"] = feature["geometry"]["coordinates"]
-                except TypeError:
-                    # Latitude and longtitude are required inputs, so throw an error if they can't be found.
-                    try: new_feature["coordinates"] = [float(feature["properties"]["longitude"]), float(feature["properties"]["latitude"])]
-                    except KeyError: raise Exception(f"Latitude or longitude has not been provided. Please provide those values.")
-                
-                # Icon is an object and the whole object needs to be taken from the template file. A string is what's provided by the dataframe, so we have to do this specially.
-                try: new_feature["icon"] = self.icon_list[feature["properties"]["icon"]]
-                except: raise Exception(f"Icon template not found. Please specify a valid icon.")
+                new_feature = {
+                "type": "point",
+                "title": feature["title"] if "title" in input_data and not pd.isna(feature["title"]) else "",
+                "icon": self.icon_list[feature["icon"]] if "icon" in input_data and not pd.isna(feature["icon"]) else self.icon_list["circle"],
+                "scale": feature["scale"] if "scale" in input_data and not pd.isna(feature["scale"]) else 1.1,
+                "textPosition": True,
+                "markerColor": feature["markerColor"] if "markerColor" in input_data and not pd.isna(feature["markerColor"]) else "#C42127",
+                "markerSymbol": feature["markerSymbol"] if "markerSymbol" in input_data and not pd.isna(feature["markerSymbol"]) else "",
+                "markerTextColor": "#333333",
+                "anchor": feature["anchor"] if "anchor" in input_data and not pd.isna(feature["anchor"]) else "middle-left",
+                "offsetY": 0,
+                "offsetX": 0,
+                "labelStyle": "plain",
+                "text": {
+                    "bold": False,
+                    "color": "#333333",
+                    "fontSize": 14,
+                    "halo": "#f2f3f0",
+                    "italic": False,
+                    "space": False,
+                    "uppercase": False
+                },
+                "class": "",
+                "rotate": 0,
+                "visible": feature["visible"] if "visible" in input_data and not pd.isna(feature["visible"]) else True,
+                "locked": False,
+                "preset": "-",
+                "visibility": {
+                    "desktop": feature["visible"] if "visible" in input_data and not pd.isna(feature["visible"]) else True,
+                    "mobile": feature["visible"] if "visible" in input_data and not pd.isna(feature["visible"]) else True,
+                },
+                "tooltip": {
+                    "text": feature["tooltip"] if "tooltip" in input_data and not pd.isna(feature["tooltip"]) else ""
+                },
+                "connectorLine": {
+                    "enabled": False,
+                    "arrowHead": "lines",
+                    "type": "curveRight",
+                    "targetPadding": 3,
+                    "stroke": 1,
+                    "lineLength": 0
+                },
+                }
+
+                # For coordinates for point markers, users can specify either points in WKY Point form,
+                # or latitude and longitude columns. This logic handles the creation of the coordinates
+                # list differently depending on which columns are present.
+                if "longitude" and "latitude" in feature:
+                    new_feature["coordinates"] = [feature["longitude"], feature["latitude"]]
+                elif hasattr(feature, "geometry"):
+                    try: new_feature["coordinates"] = [float(feature["geometry"].x), float(feature["geometry"].y)]
+                    except: raise Exception(f"There was an issue with converting geometry column coordinates into coordinates. Please ensure geometry for point markers is a WKT of type Point.")
+                else:
+                    raise Exception(f'No geometry or latitude and longitude columns found in input data.')
             
-            # Here we handle the special properties of area markers.        
+            
+            
             elif marker_type == "area":
-                
-                # Area markers have a special attribute called "feature" that houses the geometry. Note the "type" must be feature or DW will error.
-                new_feature["feature"] = {
-                    "type": "Feature",
-                    "properties": [],
-                    "geometry": feature["geometry"]
-                    }
-                
-                
-                
-                # The "stroke" needs to be handled differently because the stroke attribute in the datawrapper object is
-                # a boolean value that controls if the stroke is visible or not, whereas the dataframe specifies the stroke
-                # color, not whether it's visible or not.
-                # TODO allow for specification of stroke and fill to be enabled/disabled using boolean.
-                
-                for prop in ["stroke", "fill"]:
-                    try:
-                        if isinstance(feature["properties"][prop], str):
-                            new_feature["properties"][prop] = feature["properties"][prop]
-                        else:
-                            new_feature["properties"][prop] = template["properties"][prop]
-                            
-                    except KeyError: new_feature["properties"][prop] = template["properties"][prop]
                     
-                    try:
-                        if isinstance(feature["properties"][prop + "-opacity"], int | float) and feature["properties"][prop + "-opacity"] != 0.0:
-                            new_feature[prop] = True
-                        else:
-                            new_feature[prop] = False
-                    except KeyError: new_feature[prop] = True
+                new_feature = {
+                    "type": "area",
+                    "title": feature["title"] if "title" in input_data and not pd.isna(feature["title"]) else "",
+                    "visible": feature["visible"] if "visible" in input_data and not pd.isna(feature["visible"]) else True,
+                    "fill": feature["fill"] if "fill" in input_data and not pd.isna(feature["fill"])and isinstance(feature["fill"], bool) else True,
+                    "stroke": feature["stroke"] if "stroke" in input_data  and not pd.isna(feature["stroke"]) and isinstance(feature["fill"], bool) else True,
+                    "exactShape": False,
+                    "highlight": False,
+                    "markerColor": feature["markerColor"] if "markerColor" in input_data and not pd.isna(feature["markerColor"]) else "#C42127",
+                    "properties": {
+                        "fill": feature["fill"] if "fill" in input_data and not pd.isna(feature["fill"]) and isinstance(feature["fill"], str) else "#C42127",
+                        "fill-opacity": feature["fill-opacity"] if ("fill-opacity" in feature and feature["fill-opacity"] and not pd.isna(feature["fill-opacity"])) else 0.3,
+                        "stroke": feature["stroke"] if "stroke" in input_data and not pd.isna(feature["stroke"]) and isinstance(feature["fill"], str) else "#000000",
+                        "stroke-width": 1,
+                        "stroke-opacity": feature["stroke-opacity"] if ("stroke-opacity" in feature and feature["stroke-opacity"] and not pd.isna(feature["stroke-opacity"])) else 0.7,
+                        "stroke-dasharray": feature["stroke-dasharray"] if "stroke-dasharray" in input_data and not pd.isna(feature["stroke-dasharray"]) else "100000",
+                        "pattern": "solid",
+                        "pattern-line-width": 2,
+                        "pattern-line-gap": 2
+                    },
+                    "icon": {"id": "area",
+                        "path": "M225-132a33 33 0 0 0-10 1 38 38 0 0 0-27 28l-187 798a39 39 0 0 0 9 34 37 37 0 0 0 33 12l691-93 205 145a38 38 0 0 0 40 2 38 38 0 0 0 20-36l-54-653a38 38 0 0 0-17-28 38 38 0 0 0-32-5l-369 108-274-301a39 39 0 0 0-28-12z",
+                        "horiz-adv-x": 1000,
+                        "scale": 1.1,
+                        "outline": "2px"},
+                    "visibility": {
+                        "desktop": feature["visible"] if "visible" in input_data and not pd.isna(feature["visible"]) else True,
+                        "mobile": feature["visible"] if "visible" in input_data and not pd.isna(feature["visible"]) else True,
+                    },
+                    "feature": {
+                        "type": "Feature",
+                        "properties": {},
+                        "geometry": Feature(geometry=feature["geometry"], properties={})["geometry"]
+                        }
+                }
             
-            # If marker type is not either point or area, throw an error. This differs from above error handling in that it
-            # the above does not validate that icon is ponit or area.
-            else: raise Exception(f"Something is wrong with your marker type.")
+            
             
             new_features.append(new_feature)
 
@@ -626,7 +768,7 @@ class Map(DatawrapperGraphic):
         # Datawrapper uses a convention to ID features following m0, m1, m2 etc. Add these in once we have all the markers in a list so there are no duplicates.
         for i, feature in enumerate(new_features):
             feature["id"] = "m" + str(i)
-            
+        
         # Change layout of the markers to match what Datawrapper likes to receive.    
         payload = {"markers": new_features}
         payload = json.dumps(payload)
@@ -635,7 +777,7 @@ class Map(DatawrapperGraphic):
         headers = {"Authorization": f"Bearer {self.DW_AUTH_TOKEN}"}
         r = requests.put(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers, data=payload)
 
-        if r.ok: print(f"SUCCESS: Data added to chart.")
+        if r.ok: logging.info(f"SUCCESS: Data added to chart.")
         else: raise Exception(f"ERROR: Chart data couldn't be added. Response: {r.reason}")
         
         return self
@@ -659,7 +801,7 @@ class Map(DatawrapperGraphic):
         
         response = requests.get(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers)
         markers = response.json()["markers"]
-        print(self.path)
+        
         if save:
             with open(f"{self.path}/markers-{self.script_name}.json", 'w') as f:
                 json.dump(markers, f)
@@ -703,7 +845,6 @@ class StormMap(Map):
         filename = filename.lower()
         
         # Download and open the zipfile.
-        print(filename)
         try: resp = urlopen(filename)
         except urllib.error.HTTPError: raise Exception(f"Resource is forbidden. It's likely the shapefile for probable path is not publicly accessible.")
         
@@ -722,73 +863,62 @@ class StormMap(Map):
     
     
     # This function gets the total path of the hurricane, which is stored in a separate zip file entirely from the others.
-    # TODO clean up this function ugh.
+    # This function is not used currently.
     def __total_path(self, storm_id):
         
+        # Get the best track zipfile that contains the shapefile about the historical path of the storm.
         best_track_zip = f"https://www.nhc.noaa.gov/gis/best_track/{storm_id}_best_track.zip"
-        total_path_points = self.__get_shapefile(best_track_zip, "pts.shp$")
         
-        total_path_line = self.__get_shapefile(best_track_zip, "lin.shp$")
+        # Pull the points shapefile out of this zip file.
+        points = self.__get_shapefile(best_track_zip, "pts.shp$")
 
-        total_path_points = total_path_points[total_path_points["STORMNAME"] == self.storm_name.upper()]
-        total_path_points = total_path_points.rename(columns={"LAT": "latitude", "LON": "longitude"})
+        # points = points[points["STORMNAME"] == self.storm_name.upper()]
+        points = points.rename(columns={"LAT": "latitude", "LON": "longitude"})
 
-        total_path_points["longitude"] = total_path_points["geometry"].x.astype(float)
-        total_path_points["latitude"] = total_path_points["geometry"].y.astype(float)
-        total_path_points = total_path_points.drop(columns=["geometry"])
+        # Turn the geometry column into a lat/long column.
+        # We do this because that's what DatawrapperGraphics's data() method uses for points (it does not recognize WKT POINT() features).
+        points["longitude"] = points["geometry"].x.astype(float)
+        points["latitude"] = points["geometry"].y.astype(float)
+        points = points.drop(columns=["geometry"])
         
-        for df in [total_path_points, total_path_line]:
-            df["STORMTYPE"] = total_path_points["STORMTYPE"].replace({"TS": "S", "HU": "H", "TD": "D"})
-            df = df[df["STORMTYPE"].isin(["D", "H", "S"])]
+        # Set some attributes that are required by the data() method for points that will eventually be called on this dataset.
+        points["type"] = "point"
+        points["icon"] = "circle"
+        points["scale"] = 1.1
         
-        total_path_points["type"] = "point"
-        total_path_points["icon"] = "circle"
-        total_path_points["markerSymbol"] = total_path_points["STORMTYPE"]
-        total_path_points["markerSymbol"] = total_path_points["markerSymbol"].str.replace("M", "H")
-        total_path_points.loc[~total_path_points["markerSymbol"].isin(["D", "S", "H"]), "markerSymbol"] = ""
-        total_path_points["markerColor"] = total_path_points["markerSymbol"].replace({"H": "#e06618"})
-        total_path_points.loc[~total_path_points["markerColor"].isin(["D", "S", "H"]), "markerColor"] = "#567282"
-        total_path_points["scale"] = 1.1
-        total_path_points["tooltip"] = ""
-        total_path_points["title"] = ""
-
-        # total_path_points.loc[total_path_points["STORMTYPE"] == "D", "storm_type"] = "Depression"
-        # total_path_points.loc[total_path_points["STORMTYPE"] == "H", "storm_type"] = "Hurricane"
-        # total_path_points.loc[total_path_points["STORMTYPE"] == "S", "storm_type"] = "Storm"
-
-        total_path_points["fill"] = "#C42127"
+        points["markerSymbol"] = points["STORMTYPE"].str.replace("M", "H")
+        points.loc[~points["markerSymbol"].isin(["D", "S", "H"]), "markerSymbol"] = ""
+        points["markerColor"] = points["markerSymbol"].replace({"H": "#e06618"})
+        points.loc[points["markerColor"] != "H", "markerColor"] = "#567282"
         
+        # Pull the line shapefile out of this zip file.
+        # This is what makes the "historical path" dotted line on the Datawrapper chart.
+        line = self.__get_shapefile(best_track_zip, "lin.shp$")
         
+        # Set some attributes that are required by the data() method for areas that will eventually be called on this dataset.
+        line["stroke"] = "#000000"
+        line["type"] = "area"
+        line["stroke-dasharray"] = "1,2.2"
+        line["fill-opacity"] = 0.0
         
-        total_path_line["type"] = "area"
-        total_path_line["icon"] = "area"
-        total_path_line["fill"] = "#C42127"
-        total_path_line["stroke"] = "#000000"
-        total_path_line["stroke-opacity"] = 1.0
-        total_path_line["markerColor"] = "#C42127"
-        total_path_line["fill-opacity"] = 0.0
-        total_path_line["stroke-dasharray"] = "1,2.2"
-        total_path_line["tooltip"] = ""
-        total_path_line["title"] = ""
+        # line = line[line["SS"] >= 1]
         
-        # total_path_line = total_path_line[total_path_line["SS"] >= 1]
+        line = line.dissolve(by='STORMNUM')
         
-        total_path_line = total_path_line.dissolve(by='STORMNUM')
-        print(total_path_points)
+        df = pd.concat([line])
         
-        return pd.concat([total_path_points, total_path_line])
+        # This bit of code standardizes the storm classifcations into a style that Datawrapper can use (single letters, not two).
+        # df["STORMTYPE"] = (df["STORMTYPE"]
+        #                     .replace({"TS": "S", "HU": "H", "TD": "D"})
+        #                     .loc[df["STORMTYPE"].isin(["D", "H", "S"]), :]
+        #                     )
+        
+        return df
     
-    # This method is sort of like a custom version of Map's data() method, which is then called after calling this.
-    
-    # TODO add decorator to this to make it a "data" call, to match other maps?
-    # TODO make it so this is called in the Map class's data() method so it instantiates like standard Map class.
+    # This method is a custom version of Map's data() method, which is then called after calling this.
     def data(self):
         
-        # NOAA provides data in different timezomes (at least one: CST). Define eastern timezome here for later conversion.
-        eastern = pytz.timezone('US/Eastern')
-        
         # Get storm metadata.
-        print(self.xml_url)
         metadata = pd.read_xml(self.xml_url, xpath="/rss/channel/item[1]/nhc:Cyclone", namespaces={"nhc":"https://www.nhc.noaa.gov"})
         
         # Split the marker for the center of the storm into latitude and longitude values.
@@ -806,6 +936,7 @@ class StormMap(Map):
         self.storm_type = metadata.at[0, "type"]
         
         # Pull in data from NOAA five day forecast shapefile.
+        # This is where we get the centre line, probable path cone shape, and points in probable path.
         five_day_latest_filename = f"https://www.nhc.noaa.gov/gis/forecast/archive/{self.storm_id}_5day_latest.zip"
         
         # Get points layer from five day forecast shapefile.
@@ -816,70 +947,76 @@ class StormMap(Map):
         points["latitude"] = points["geometry"].y.astype(float)
         points = points.drop(columns=["geometry"])
         
-        points["DATELBL"] = pd.to_datetime(points["DATELBL"]).apply(lambda x: x.tz_localize("America/Chicago"))
-        points["DATELBL"] = points["DATELBL"].dt.tz_convert('US/Eastern')
+        # Define necessary info for point markers.
         points["type"] = "point"
-        points["icon"] = "circle"
-        points["fill"] = "#C42127"
-        points["title"] = points['DATELBL'].dt.strftime("%b %e") + "<br>" + points['DATELBL'].dt.strftime("%I:%M %p")
-        points["title"] = points["title"].str.replace("<br>0", "<br>")
-        points["scale"] = 1.1
+        
+        # String together a title from information in each row.
+        points['DATELBL'] = pd.to_datetime(points['DATELBL'])
+        points["title"] = points['DATELBL'].dt.strftime("%A") + "<br>" + points['DATELBL'].dt.strftime("%I:%M %p").replace("<br>0", "<br>")
+        
+        # Marker symbols are the little letters in each point marker.
         points["markerSymbol"] = points["DVLBL"]
+        
+        # Define colors based on the letters we use to mark each point.
         points["markerColor"] = points["markerSymbol"].replace({"D": "#567282", "S": "#567282", "H": "#e06618"})
         
+        # Define label anchors.
+        points["anchor"] = "middle-left"
+        
+        # Define a written out version of what kind of storm it is at each point for use in the tooltip.
         points.loc[points["DVLBL"] == "D", "storm_type"] = "Depression"
         points.loc[points["DVLBL"] == "H", "storm_type"] = "Hurricane"
         points.loc[points["DVLBL"] == "S", "storm_type"] = "Storm"
         
-        points["tooltip"] = "On " + points['DATELBL'].dt.strftime("%b %e") + " at " + points['DATELBL'].dt.strftime("%I:%M %p").str.replace("$0", "", regex=True) + " EST, the storm is projected to be classified as a " + points["storm_type"].str.lower() + "."
-        points["tooltip"] = points["tooltip"].str.replace(" 0", " ")
+        # Put together the tooltip for each map point.
+        points["tooltip"] = "On " + points['DATELBL'].dt.strftime("%b %e") + " at " + points['DATELBL'].dt.strftime("%I:%M %p").str.replace(" 0", "", regex=True) + " EST, the storm is projected to be classified as a " + points["storm_type"].str.lower() + "."
         
         # Get center line layer from five day forecast shapefile.
         centre_line = self.__get_shapefile(five_day_latest_filename, "5day_lin.shp$")
         
         # Define properties unique to centre line.
         centre_line["stroke"] = "#000000"
-        centre_line["fill-opacity"] = 0.0
-        centre_line["stroke-opacity"] = 0.5
+        centre_line["fill"] = False
+        centre_line["title"] = "Probable path centre line"
         
         # Get probable path layer from five day forecast shapefile.
+        # This layer is the cone that shows where the storm may move next.
         probable_path = self.__get_shapefile(five_day_latest_filename, "5day_pgn.shp$")
         
         # Define properties unique to probable path shape.
         probable_path["fill"] = "#6a3d99"
-        probable_path["stroke"] = "#6a3d99"
-        probable_path["markerColor"] = "#6a3d99"
+        probable_path["stroke"] = False
         probable_path["fill-opacity"] = 0.3
-        probable_path["stroke-opacity"] = 0.0
         probable_path["title"] = "Probable path"
         
-        # Define some common style points for the centre line and the probable path.
-        for df in [centre_line, probable_path]:
-        
-            df["type"] = "area"
-            df["icon"] = "area"
-        
         # Call the method that returns our total path information. This holds historical info about where the hurricane has been.
-        total_path = self.__total_path(storm_id=self.storm_id)
+        # TODO add point information back into historical path?
+        # total_path = self.__total_path(storm_id=self.storm_id)
         
-        # Concatenate all our dataframes into one large dataframe so we can upload it.
-        all_shapes = pd.concat([centre_line, probable_path, points, total_path])
+        # Get the best track zipfile that contains the shapefile about the historical path of the storm.
+        best_track_zip = f"https://www.nhc.noaa.gov/gis/best_track/{self.storm_id}_best_track.zip"
+        historical_path = self.__get_shapefile(best_track_zip, "lin.shp$")
         
-        # Filter out all the columsn we don't care about keeping.
-        # TODO remove this, as the new data() method should be able to do this without specifying.
-        all_shapes = all_shapes[["markerColor", "fill", "fill-opacity", "stroke", "stroke-opacity", "type", "icon", "latitude", "longitude", "geometry", "title", "tooltip", "scale", "markerSymbol", "stroke-dasharray"]]
+        # Set some attributes that are required by the data() method for areas that will eventually be called on this dataset.
+        historical_path["stroke"] = "#000000"
+        historical_path["stroke-dasharray"] = "1,2.2"
+        historical_path["fill"] = False
         
+        # Dissolve several features of this line into one long line, as the individual segments are not of interest to us.
+        historical_path = historical_path.dissolve(by='STORMNUM')
         
-        # Fill any null values in latitude and longitude columns.
-        # TODO do we need these fillna lines?
-        all_shapes["latitude"] = all_shapes["latitude"].fillna("")
-        all_shapes["longitude"] = all_shapes["longitude"].fillna("")
-          
-        # I've commented the next line out because I don't think I need it with the new data() method structure.  
-        # all_shapes["stroke-dasharray"] = all_shapes["stroke-dasharray"].fillna("100000")
+        # Concatenate all our area markers together so we can define some common characteristics.
+        shapes = pd.concat([centre_line, probable_path, historical_path])
+        
+        # Define some common style points for the centre line and the probable path.
+        shapes["icon"] = "area"
+        shapes["type"] = "area"
+        
+        # Concatenate areas and points into one large dataframe so we can upload it.
+        markers = pd.concat([shapes, points])
 
         # Save as the object's dataset.
-        self.dataset = all_shapes
+        self.dataset = markers
         
         # Pass the dataset we've just prepped into the super's data method.
         return super(self.__class__, self).data(self.dataset)
