@@ -58,6 +58,9 @@ class DatawrapperGraphic:
                  auth_token: str = None,
                  folder_id: str = None):
         
+        # Turn on logging of INFO level.
+        logging.basicConfig(level=logging.INFO)
+        
         # Set OS name (see global DatawrapperGraphic variables)
         self.os_name = os.name
         
@@ -765,9 +768,6 @@ class Map(DatawrapperGraphic):
         # Datawrapper uses a convention to ID features following m0, m1, m2 etc. Add these in once we have all the markers in a list so there are no duplicates.
         for i, feature in enumerate(new_features):
             feature["id"] = "m" + str(i)
-            
-        with open(f"./markers-{self.script_name}.json", 'w') as f:
-                json.dump(new_features, f)
         
         # Change layout of the markers to match what Datawrapper likes to receive.    
         payload = {"markers": new_features}
