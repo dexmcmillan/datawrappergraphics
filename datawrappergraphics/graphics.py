@@ -182,7 +182,7 @@ class Graphic:
             "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
         }
         
-        r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=json.dumps(self.metadata))
+        r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=json.dumps(self.metadata).encode('utf-8'))
         
         self.metadata = r.json()
         
@@ -219,7 +219,7 @@ class Graphic:
         data = {"title": string}
         data = json.dumps(data)
         
-        r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=data)
+        r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=data.encode('utf-8'))
         
         if r.ok: logging.info(f"SUCCESS: Chart head added.")
         else: raise Exception(f"ERROR: Chart head was not added. Response: {r.text}")
@@ -258,7 +258,7 @@ class Graphic:
             }
         }
         
-        r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=json.dumps(payload))
+        r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=json.dumps(payload).encode('utf-8'))
         
         if r.ok: logging.info(f"SUCCESS: Chart deck added.")
         else: raise Exception(f"ERROR: Chart deck was not added. Response: {r.text}")
@@ -501,6 +501,10 @@ class Graphic:
         
         return self
 
+
+
+
+
 class Chart(Graphic):
     
     """Defines methods and variables for uploading data to datawrapper charts (scatter plots, tables etc).
@@ -549,7 +553,7 @@ class Chart(Graphic):
 
         payload = data.to_csv()
         
-        r = requests.put(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers, data=payload)
+        r = requests.put(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers, data=payload.encode('utf-8'))
 
         if r.ok: logging.info(f"SUCCESS: Data added to chart.")
         else: raise Exception(f"Chart data couldn't be added. Response: {r.reason}")
@@ -909,7 +913,8 @@ class StormMap(Map):
     def data(self):
         
         # Get storm metadata.
-        metadata = pd.read_xml(self.xml_url, xpath="/rss/channel/item[1]/nhc:Cyclone", namespaces={"nhc":"https://www.nhc.noaa.gov"})
+        try: metadata = pd.read_xml(self.xml_url, xpath="/rss/channel/item[1]/nhc:Cyclone", namespaces={"nhc":"https://www.nhc.noaa.gov"})
+        except ValueError: NoStormDataError()
         
         # Split the marker for the center of the storm into latitude and longitude values.
         metadata["latitude"] = pd.Series(metadata.at[0, "center"].split(",")[0].strip()).astype(float)
@@ -1075,6 +1080,12 @@ class FibonacciChart(Chart):
         return super(self.__class__, self).data(self.dataset)
     
     
+    
+    
+    
+    
+    
+    
 class CircleChart(Chart):
     
     def __init__(self, *args, **kwargs):
@@ -1117,6 +1128,8 @@ class CircleChart(Chart):
 
 class CalendarChart(Chart):
     
+    
+    
     def __init__(self, *args, **kwargs):
         
         super().__init__(*args, **kwargs)
@@ -1124,25 +1137,52 @@ class CalendarChart(Chart):
         
 
     
-    def data(self, input_data: pd.DataFrame, date_col: str):
+    def data(self, input_data: pd.DataFrame, date_col: str, timeframe: str = "month"):
         
         # Convert the specified date column into pd.datetime.
         try: input_data[date_col] = pd.to_datetime(input_data[date_col])
         except: raise Exception(f"There was a problem converting your provided column to a pandas datetime series.")
         
-        # Get the numerical day of week for each date in the dataframe.
-        # This will make up the X coordinates (left to right on the graphic)
-        input_data["x"] = input_data[date_col].dt.dayofweek
         
-        # Make an empty dataframe for the y column.
-        input_data["y"] = pd.NA
+        # This will output a calendar plot with a month scale (ie. days of the week are lined up.)
+        if timeframe == "month":
+            
+            # Get the numerical day of week for each date in the dataframe.
+            # This will make up the X coordinates (left to right on the graphic)
+            input_data["x"] = input_data[date_col].dt.dayofweek
+            
+            # Make an empty series for the y column.
+            input_data["y"] = pd.NA
         
-        # Set all 0s (ie. every Monday) to a new week number (1, 2, 3 etc.)
-        input_data.loc[input_data["x"] == 0, "y"] = range(2,(len(input_data.loc[input_data["x"] == 0, "y"])+2))
+            # Set all 0s (ie. every Monday) to a new week number (1, 2, 3 etc.)
+            input_data.loc[input_data["x"] == 0, "y"] = range(2,(len(input_data.loc[input_data["x"] == 0, "y"])+2))
+            
+            # Forward fill for the other weekday values (1-6).
+            # This makes up our y axis.
+            # the .fillna after the ffill here is necessary, because the first few days don't get any numbers otherwise.
+            input_data["y"] = input_data["y"].fillna(method="ffill").fillna(1)
         
-        # Forward fill for the other weekday values (1-6).
-        # This makes up our y axis.
-        input_data["y"] = input_data["y"].fillna(method="ffill").fillna(1)
+        
+        # This will output a calendar on a year scale, rather than a month scale.
+        if timeframe == "year":
+            
+            density = 15
+            
+            input_data["x"] = input_data[date_col].dt.dayofyear
+            
+            # Make an empty series for the y column.
+            input_data["y"] = pd.NA
+        
+            # # Set all 0s (ie. every Monday) to a new week number (1, 2, 3 etc.)
+            # input_data.loc[input_data["x"]%12 == 0, "y"] = range(2,(len(input_data.loc[input_data["x"]%12 == 0, "y"])+2))
+            
+            input_data["y"] = input_data["x"].apply(lambda x: math.floor(x/density))
+            input_data["x"] = input_data["x"] - density*(input_data["y"])
+            
+            # Forward fill for the other weekday values (1-6).
+            # This makes up our y axis.
+            # the .fillna after the ffill here is necessary, because the first few days don't get any numbers otherwise.
+            input_data["y"] = input_data["y"].fillna(method="ffill").fillna(1)
         
         # Add a column with the English name for each weekday and each month.
         input_data["day_of_week"] = input_data[date_col].dt.strftime("%A")

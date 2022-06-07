@@ -27,3 +27,9 @@ class InvalidExportTypeError(Exception):
         super().__init__(f"The file format you specified is invalid. Please select one of:  {', '.join(allowed_values_list)}.")
         
         
+        
+class NoStormDataError(Exception):
+    
+    def __init__(self):
+        
+        super().__init__(f"No storm data to pull. The storm may not exist or it may have passed.")      
