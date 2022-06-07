@@ -8,6 +8,8 @@ import geopandas
 import datetime
 import logging
 import urllib.error
+import numpy as np
+import math
 from geojson import Feature
 from io import BytesIO
 from zipfile import ZipFile
@@ -17,40 +19,45 @@ from datawrappergraphics.errors import *
 
 
 
-class DatawrapperGraphic:
+class Graphic:
     
-    """
-    There are two opens when creating a new DatawrapperGraphic object:
+    """The base class for Datawrapper graphics.
+    
+    There are two opens when creating a new Graphic object:
         
-        1. You can create a brand new chart by specifying no chart_id and no copy_id. This is not recommended but can be used to create a large number of charts en-mass,
-        and then save their info into a csv or something.
+    1. You can create a brand new chart by specifying no chart_id and no copy_id. This is not recommended but can be used to create a large number of charts en-mass,
+    and then save their info into a csv or something.
+    
+    2. You can specify a copy_id, and a new chart will be created by copying that chart. This is also not recommended but can be used for various purposes.
+    
+    3. You can specify a chart that is already made that you want to update. This is the easiest way - copy another chart in the Datawrapper app and then
+    use that chart_id.
+    
+    Args:
+        chart_id (str): The ID of the chart you're bringing into the module. Providing this string value is the typical implementation of this library.
+        copy_id (str, optional): Instead of a chart_id, you can specify the id of a chart to copy. Keep in mind that this will keep making copies if you keep running code, so it's best run only once, then use chart_id.
+        auth_token (str, optional): The auth_token from Datawrapper. You can authenticate by passing this into the class instantiation, or by putting an auth.txt file in your project's root folder with the token.
+        folder_id (str, optional): If a new chart is being created because no chart_id or copy_id is passed, this is where you specify which folder to create it in.
+
+    Attributes:
+        CHART_ID (str): The CHART_ID is a unique ID that can be taken from the URL of datawrappers. It's required to use the DW api.
+        metadata (str): Holds the chart's metadata when the graphic is instantiated.
+        dataset (pd.DataFrame): Represents the data that is uploaded or will be uploaded to the graphic.
+        DW_AUTH_TOKEN (str): Token to authenticate to Datawrapper's API.
+        path (str): Path that the script is running from using this module.
+        script_name (str): Name of the script currently running using this module.
         
-        2. You can specify a copy_id, and a new chart will be created by copying that chart. This is also not recommended but can be used for various purposes.
-        
-        3. You can specify a chart that is already made that you want to update. This is the easiest way - copy another chart in the Datawrapper app and then
-        use that chart_id.
+    Returns:
+        object: Returns self, the instance of the Graphic class. Can be chained with other methods.
     """
     
-    # The CHART_ID is a unique ID that can be taken from the URL of datawrappers. It's required to use the DW api.
     global CHART_ID
-    
-    # Holds the chart's metadata when the graphic is instantiated.
     global metadata
-    
-    # Represents the data that is uploaded or will be uploaded to the graphic.
     global dataset
-    
-    # What OS is the script running on? This effects timestamping as unix uses UTC.
-    global os_name
-    
-    # Token to authenticate to Datawrapper's API.
     global DW_AUTH_TOKEN
-    
-    # Path that the script is running from using this module.
     global path
-    
-    # Name of the script currently running using this module.
     global script_name
+    global _os_name
     
     def __init__(self,
                  chart_id: str = None,
@@ -61,10 +68,10 @@ class DatawrapperGraphic:
         # Turn on logging of INFO level.
         logging.basicConfig(level=logging.INFO)
         
-        # Set OS name (see global DatawrapperGraphic variables)
-        self.os_name = os.name
+        # Set OS name (see global Graphic variables)
+        self._os_name = os.name
         
-        self.script_name = os.path.basename(sys.argv[0]).replace(".py", "").replace("script-", "")
+        self.script_name = os.path.basename(sys.argv[0]).replace(".py", "")
         
         self.path = os.path.dirname(sys.argv[0]) 
         
@@ -129,11 +136,14 @@ class DatawrapperGraphic:
     
     def _get_metadata(self):
         
-        """
+        """Used to collect data for the chart.
+        
         This method is used on init to collect all the data (not just what's in the metadata object, but ALL the data from the chart)
         into in the object for reference in the metadata property.
         
         Note that it will not (as of yet) update on the live chart until you call set_metadata().
+        
+        Args: None
         """
         
         headers = {
@@ -158,13 +168,12 @@ class DatawrapperGraphic:
     
     def set_metadata(self):
         
-        """A method that sends the metadata stored in the DatawrapperGraphics object to
-            the live chart on Datawrapper.
+        """A method that sends the metadata stored in the Graphics object to the live chart on Datawrapper.
 
         Args: None
 
         Returns:
-            object: Returns self, the instance of the DatawrapperGraphics class. Can be chained with other methods.
+            object: Returns self, the instance of the Graphics class. Can be chained with other methods.
         """
         
         headers = {
@@ -173,100 +182,6 @@ class DatawrapperGraphic:
             "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
         }
         
-        template = {'thumbnails': {
-                'full': '//img.datawrapper.de/nSHo0/b31913d1ae7339725e20821d825ef7f5/full.png',
-                'plain': '//img.datawrapper.de/nSHo0/b31913d1ae7339725e20821d825ef7f5/plain.png'},
-               'publicId': 'nSHo0',
-               'language': 'en-US',
-               'theme': 'cbc',
-               'authorId': 282719,
-               'createdAt':'2022-05-30T17:04:21.000Z',
-               'externalData': None,
-               'forkable': False,
-               'forkedFrom': '83uUC',
-               'id': 'nSHo0',
-               'isFork': False,
-               'lastEditStep': 5,
-               'lastModifiedAt': '2022-06-05T14:16:31.000Z',
-               'metadata': {
-                   'data': {
-                       'transpose': False,
-                       'vertical-header': True,
-                       'horizontal-header': True,
-                       'json': True
-                       },
-                   'describe': {
-                       'source-name': 'U.S. National Hurricane Center',
-                       'source-url': '',
-                       'intro': 'Windspeed is currently measured at <b>96 km/h</b>.',
-                       'byline': 'Dexter McMillan',
-                       'aria-description': '',
-                       'number-format': '-',
-                       'number-divisor': 0,
-                       'number-append': '',
-                       'number-prepend': ''
-                       },
-                   'visualize': {
-                       'highlighted-series': [],
-                       'highlighted-values': [],
-                       'view': {
-                           'fit': {
-                               'top': [-67.98585335442425, 50.960484198569304],
-                               'left': [-102.04827196201292, 32.34364955620653],
-                               'right': [-33.923434746835596, 32.34364955620653],
-                               'bottom': [-67.98585335442425, 8.97056056217815]
-                               },
-                           'zoom': 3.5,
-                           'pitch': 0,
-                           'center': [-67.98585335442522, 32.34364955620599],
-                           'height': 74, 'bearing': 0
-                           },
-                       'scale': False,
-                       'style': 'dw-light',
-                       'locked': False,
-                       'upload': {
-                           'maxSize': 2000000, 'maxMarkers': 100
-                           },
-                       'x-grid': 'on',
-                       'compass': False,
-                       'markers': None,
-                       'sharing': {
-                           'auto': True, 'enabled': False
-                           },
-                       'mapLabel': True,
-                       '_last_tab': 'markers',
-                       'addRegion': False,
-                       'scaleUnit': 'metric',
-                       'publish': {
-                           'embed-width': 1096,
-                           'embed-height': 998,
-                            'embed-codes': {
-                                'embed-method-iframe': '<iframe title="TEST: Tracking tropical storm Alex" aria-label="Locator maps" id="datawrapper-chart-nSHo0" src="https://datawrapper.dwcdn.net/nSHo0/284/" scrolling="no" frameborder="0" style="border: none;" width="1096" height="998"></iframe>',
-                                'embed-method-responsive': '<iframe title="TEST: Tracking tropical storm Alex" aria-label="Locator maps" id="datawrapper-chart-nSHo0" src="https://datawrapper.dwcdn.net/nSHo0/284/" scrolling="no" frameborder="0" style="width: 0; min-width: 100% !important; border: none;" height="998"></iframe><script type="text/javascript">!function(){"use strict";window.addEventListener("message",(function(e){if(void 0!==e.data["datawrapper-height"]){var t=document.querySelectorAll("iframe");for(var a in e.data["datawrapper-height"])for(var r=0;r<t.length;r++){if(t[r].contentWindow===e.source)t[r].style.height=e.data["datawrapper-height"][a]+"px"}}}))}();\n</script>'
-                                }
-                            },
-                       'annotate': {
-                           'notes': 'Last updated on June 5, 2022 at 10:16 a.m.'
-                           },
-                       'custom': {},
-                       'json_error': None},
-                   'organizationId': 'cbc',
-                   'publicUrl': 'https://datawrapper.dwcdn.net/nSHo0/284/',
-                   'publicVersion': 284,
-                   'publishedAt': '2022-06-05T14:16:31.000Z',
-                   'title':
-                       'TEST: Tracking tropical storm Alex',
-                       'type': 'locator-map',
-                       'customFields': {},
-                       'folderId': 105625,
-                       'author': {
-                           'name': 'Dexter McMillan',
-                           'email': 'dexter.mcmillan@cbc.ca'
-                           },
-                       'url': '/v3/charts/nSHo0'
-                       }
-        }
-
         r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=json.dumps(self.metadata))
         
         self.metadata = r.json()
@@ -290,7 +205,7 @@ class DatawrapperGraphic:
             string (str): The headline for your chart.
 
         Returns:
-            object: Returns self, the instance of the DatawrapperGraphics class. Can be chained with other methods.
+            object: Returns self, the instance of the Graphics class. Can be chained with other methods.
         """
     
         # Define headers for headline upload.
@@ -327,7 +242,7 @@ class DatawrapperGraphic:
             string (str): The subhead for your chart.
 
         Returns:
-            object: Returns self, the instance of the DatawrapperGraphics class. Can be chained with other methods.
+            object: Returns self, the instance of the Graphics class. Can be chained with other methods.
         """
         
         headers = {
@@ -374,12 +289,12 @@ class DatawrapperGraphic:
             timestamp (bool): Whether a timestamp should be included or not. Timestamps are added right after whatever you specify as the note.
 
         Returns:
-            object: Returns self, the instance of the DatawrapperGraphics class. Can be chained with other methods.
+            object: Returns self, the instance of the Graphics class. Can be chained with other methods.
         """
         
         today = datetime.datetime.today()
         
-        if self.os_name == "posix":
+        if self._os_name == "posix":
             today = today - datetime.timedelta(hours=4)
         
         # Get day and time strings for use in the footer timestamp.
@@ -428,6 +343,15 @@ class DatawrapperGraphic:
     
     
     def publish(self):
+        
+        """Publishes your graphic. Is typically called last in an implementation pattern.
+
+        Args:
+            None
+
+        Returns:
+            object: Returns self, the instance of the Graphics class. Can be chained with other methods.
+        """
 
         headers = {
             "Accept": "*/*", 
@@ -448,6 +372,15 @@ class DatawrapperGraphic:
     
     # This method authenticates to Datawrapper and returns the token for accessing the DW api.
     def auth(self, token: str = None):
+        
+        """A mostly internal function to authenticate to Datawrapper's API.
+
+        Args:
+            token (str): If a token is specified manually, it can be passed here.
+
+        Returns:
+            object: Returns self, the instance of the Graphics class. Can be chained with other methods.
+        """
         
         if token != None:
             DW_AUTH_TOKEN = token
@@ -471,6 +404,15 @@ class DatawrapperGraphic:
     
     # Moves your chart to a particular folder ID.
     def move(self, folder_id: str):
+        
+        """Moves your graphic to the specified folder ID.
+
+        Args:
+            folder_id (str): The folder to move your chart to.
+
+        Returns:
+            object: Returns self, the instance of the Graphics class. Can be chained with other methods.
+        """
         
         headers = {
             "Accept": "*/*", 
@@ -496,6 +438,15 @@ class DatawrapperGraphic:
     
     def delete(self):
         
+        """Deletes your graphic.
+
+        Args:
+            None
+
+        Returns:
+            object: Returns self, the instance of the Graphics class. Can be chained with other methods.
+        """
+        
         logging.warning(f"Deleting chart with ID {self.CHART_ID}!")
         
         headers = {
@@ -513,9 +464,24 @@ class DatawrapperGraphic:
     
     
     
-    def export(self, format: str = "png", filename: str = "export.png"):
+    def export(self, format: str = "png", filename: str = "export"):
         
-        file_path = self.path + filename
+        """Exports your graphic.
+
+        Args:
+            format (str, optional): The filetype to export as. Allowed types: png, svg.
+            filename (str, optional): The name for the exported file, relative to project root. Defaults to: export.png. Do not specify a file suffix here.
+
+        Returns:
+            object: Returns self, the instance of the Graphics class. Can be chained with other methods.
+        """
+        
+        VALID_FORMAT_LIST = ["png", "svg"]
+        
+        if format not in VALID_FORMAT_LIST:
+            raise InvalidExportTypeError(f"Invalid export type specified.", VALID_FORMAT_LIST)
+        
+        file_path = self.path + filename + "." + format
         
         headers = {
             "Accept": "image/png", 
@@ -535,11 +501,13 @@ class DatawrapperGraphic:
         
         return self
 
-# The Chart class defines methods and variables for uploading data to datawrapper charts (scatter plots, tables etc).
-# Use this class to create a new, copy, or to manage a currently existing Datawrapper chart (ie. not a map!).
-class Chart(DatawrapperGraphic):
+class Chart(Graphic):
     
-    script_name = os.path.basename(sys.argv[0]).replace(".py", "").replace("script-", "")
+    """Defines methods and variables for uploading data to datawrapper charts (scatter plots, tables etc).
+    
+    Use this class to create a new, copy, or to manage a currently existing Datawrapper chart (ie. not a map!).
+    
+    """
     
     def __init__(self,
                  *args,
@@ -547,6 +515,29 @@ class Chart(DatawrapperGraphic):
                  ):
         
         super(Chart, self).__init__(*args, **kwargs)
+        
+        
+        
+        
+        
+    def disable_grid(self):
+        
+        # Set a few visualization properties that control the grid visibility on charts.
+        self.metadata["metadata"]['visualize']["y-grid"] = "off"
+        self.metadata["metadata"]['visualize']["x-grid"] = "off"
+        
+        self.metadata["metadata"]['visualize']["y-grid-lines"] = "off"
+        self.metadata["metadata"]['visualize']["x-grid-lines"] = "off"
+        
+        # Send the metadata representation in this class to the datawrapper graphic.
+        self.set_metadata()
+        
+        return self
+        
+        
+        
+        
+        
     
     def data(self, data: pd.DataFrame):
         
@@ -571,7 +562,7 @@ class Chart(DatawrapperGraphic):
 
 # This class defines methods and variables for Datawrapper locator maps.
 # It is also extended by the hurricane map class below.
-class Map(DatawrapperGraphic):
+class Map(Graphic):
     
     # Script_name variable is used to pull the right icon templates from the assets folder, and is set on init.
     global script_name
@@ -749,7 +740,6 @@ class Map(DatawrapperGraphic):
         
         # If there are other shapes to be added (ie. highlights of provinces, etc.) then this will use a naming convention to grab them from the shapes folder.
         # Check if there are any extra shapes to add.
-        # TODO allow users to enter their own assets path.
         
         if append:
             
@@ -876,7 +866,7 @@ class StormMap(Map):
         points = points.rename(columns={"LAT": "latitude", "LON": "longitude"})
 
         # Turn the geometry column into a lat/long column.
-        # We do this because that's what DatawrapperGraphics's data() method uses for points (it does not recognize WKT POINT() features).
+        # We do this because that's what Graphics's data() method uses for points (it does not recognize WKT POINT() features).
         points["longitude"] = points["geometry"].x.astype(float)
         points["latitude"] = points["geometry"].y.astype(float)
         points = points.drop(columns=["geometry"])
@@ -1019,4 +1009,156 @@ class StormMap(Map):
         self.dataset = markers
         
         # Pass the dataset we've just prepped into the super's data method.
+        return super(self.__class__, self).data(self.dataset)
+    
+    
+class FibonacciChart(Chart):
+    
+    """A custom chart type that creates a fibonacci spiral with your data.
+    
+    Args:
+        chart_id (str): The ID of the chart you're bringing into the module. Providing this string value is the typical implementation of this library.
+        copy_id (str, optional): Instead of a chart_id, you can specify the id of a chart to copy. Keep in mind that this will keep making copies if you keep running code, so it's best run only once, then use chart_id.
+        auth_token (str, optional): The auth_token from Datawrapper. You can authenticate by passing this into the class instantiation, or by putting an auth.txt file in your project's root folder with the token.
+        folder_id (str, optional): If a new chart is being created because no chart_id or copy_id is passed, this is where you specify which folder to create it in.
+
+    Attributes:
+        CHART_ID (str): The CHART_ID is a unique ID that can be taken from the URL of datawrappers. It's required to use the DW api.
+        metadata (str): Holds the chart's metadata when the graphic is instantiated.
+        dataset (pd.DataFrame): Represents the data that is uploaded or will be uploaded to the graphic.
+        DW_AUTH_TOKEN (str): Token to authenticate to Datawrapper's API.
+        path (str): Path that the script is running from using this module.
+        script_name (str): Name of the script currently running using this module.
+        
+    Returns:
+        object: Returns self, the instance of the Graphic class. Can be chained with other methods.
+    """
+    
+    def __init__(self, chart_id: str = None, copy_id: str = None, auth_token: str = None, folder_id: str = None):
+        
+        super().__init__(chart_id, copy_id, auth_token, folder_id)
+        
+        
+    def data(self, input_data: pd.DataFrame):
+        
+        """A graphic that plots your dataframe into a Fibonacci spiral (a Datawrapper scatterplot).
+        
+        Args:
+            input_data (pd.DataFrame): The dataframe that you ultimately want to plat on a fibonacci chart.
+
+        Returns:
+            object: Returns the datawrapper graphic object so methods can be chained.
+        """
+        
+        # Get the number of rows in the input dataframe.
+        num_points = len(input_data)
+        
+        # Math to get fibonacci coordinates based on the number of records in the input data.
+        ga = np.pi * (3 - np.sqrt(5))
+        theta = np.arange(num_points) * ga
+
+        radius = np.sqrt(np.arange(num_points) / float(num_points))
+        x = radius * np.cos(theta)
+        y = radius * np.sin(theta)
+        
+        # Add two new columns to our the input dataframe which can be used to plot on a Datawrapper scatterplot.
+        input_data["x"] = x
+        input_data["y"] = y
+        
+        # Update the dataset property of this object.
+        self.dataset = input_data
+        
+        # Turn off the grid.
+        self.disable_grid()
+        
+        # Pass the new dataframe with the two new columns into Chart's data method to finish things off.
+        return super(self.__class__, self).data(self.dataset)
+    
+    
+class CircleChart(Chart):
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+    
+        
+    def data(self, input_data: pd.DataFrame):
+        
+        # One point will be plotted for each row. It's advisable to keep your dataset small.
+        # For calendar plots, you should have one row for each month.
+        # The circle will start at the top, and plot clockwise.
+        segments = len(input_data)
+        
+        R = 1
+        max_theta = 2* np.pi
+        
+        circle_start = (0.25*max_theta) + (max_theta/segments)
+        circle_end = (max_theta+(0.25*max_theta)) + (max_theta/segments)
+        
+        list_t = list(np.arange(circle_start, circle_end, max_theta/segments))[::-1]
+        x = [(R*math.cos(x_y)) for x_y in list_t]
+        y = [(R*math.sin(x_y)) for x_y in list_t]
+
+        input_data["x"] = x
+        input_data["y"] = y
+        
+        # Update the dataset property of this object.
+        self.dataset = input_data
+        
+        # Turn off the grid.
+        self.disable_grid()
+        
+        # Pass the new dataframe with the two new columns into Chart's data method to finish things off.
+        return super(self.__class__, self).data(self.dataset)
+    
+    
+
+
+
+class CalendarChart(Chart):
+    
+    def __init__(self, *args, **kwargs):
+        
+        super().__init__(*args, **kwargs)
+        
+        
+
+    
+    def data(self, input_data: pd.DataFrame, date_col: str):
+        
+        # Convert the specified date column into pd.datetime.
+        try: input_data[date_col] = pd.to_datetime(input_data[date_col])
+        except: raise Exception(f"There was a problem converting your provided column to a pandas datetime series.")
+        
+        # Get the numerical day of week for each date in the dataframe.
+        # This will make up the X coordinates (left to right on the graphic)
+        input_data["x"] = input_data[date_col].dt.dayofweek
+        
+        # Make an empty dataframe for the y column.
+        input_data["y"] = pd.NA
+        
+        # Set all 0s (ie. every Monday) to a new week number (1, 2, 3 etc.)
+        input_data.loc[input_data["x"] == 0, "y"] = range(2,(len(input_data.loc[input_data["x"] == 0, "y"])+2))
+        
+        # Forward fill for the other weekday values (1-6).
+        # This makes up our y axis.
+        input_data["y"] = input_data["y"].fillna(method="ffill").fillna(1)
+        
+        # Add a column with the English name for each weekday and each month.
+        input_data["day_of_week"] = input_data[date_col].dt.strftime("%A")
+        input_data["month"] = input_data[date_col].dt.strftime("%B")
+        
+        # Update the dataset property of this object.
+        self.dataset = input_data
+        
+        # Set a few visualization properties that are key to showing this data properly.
+        self.metadata["metadata"]['visualize']['y-axis']["range"] = [input_data["y"].max()+0.5, input_data["y"].min()-0.5]
+        
+        # Turn off the grid.
+        self.disable_grid()
+        
+        # Send the metadata representation in this class to the datawrapper graphic.
+        self.set_metadata()
+        
+        # Pass the new dataframe with the two new columns into Chart's data method to finish things off.
         return super(self.__class__, self).data(self.dataset)

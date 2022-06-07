@@ -1,5 +1,6 @@
 import pandas as pd
 import datawrappergraphics
+from datawrappergraphics.errors import *
 import os
 import geopandas
 import glob
@@ -8,7 +9,6 @@ import numpy
 import requests
 import json
 import logging
-from datawrappergraphics.errors import *
 import pytest
 
 
@@ -17,12 +17,42 @@ TEST_CHART_ID = "W67Od"
 TEST_HURRICANE_MAP_ID = "nSHo0"
 EASTERN_UKRAINE_CHART_ID = "ioEie"
 TEST_FIRE_MAP = "HqkeQ"
+TEST_FIB_CHART = "FAEyt"
+TEST_CIRCLE_CHART = "9iLF3"
+TEST_CALENDAR_CHART = "XTqN8"
 
 API_TEST_FOLDER = "105625"
 
-test_map_data = pd.DataFrame({"title": ["Point 1"], "latitude": [50.2373819], "longitude": [-90.708556], "anchor": ["middle-right"], "tooltip": ["A test tooltip."], "icon": ["attention"], "type": ["point"]})
-
+test_map_data = pd.DataFrame({"title": ["Point 1"], "latitude": [50.2373819], "longitude": [-90.708556], "anchor": ["middle-right"], "tooltip": ["A test tooltip."], "icon": ["custom"], "type": ["point"]})
 test_chart_data = pd.DataFrame({"date": pd.date_range("2022-01-01", "2022-06-02")[:50], "value": numpy.random.randint(1, 20, 50)})
+test_circle_chart_data = pd.DataFrame({"month": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"], "value": numpy.random.randint(1, 20, 12)})
+test_calendar_chart_data = pd.DataFrame({"date": pd.date_range("2022-09-01", "2022-10-31"), "value": numpy.random.randint(1, 20, 61)})
+
+@pytest.mark.special
+def test_calendar_chart():
+    cal_chart = datawrappergraphics.CalendarChart(TEST_CALENDAR_CHART).data(test_calendar_chart_data, date_col="date").head(f"TEST: Calendar chart test graphic").publish()
+    
+    logging.info(cal_chart.metadata)
+
+
+
+@pytest.mark.special
+def test_fibonacci_spiral():
+    fib_chart = datawrappergraphics.FibonacciChart(TEST_FIB_CHART).data(test_chart_data).head(f"TEST: Fibonacci spiral test graphic").publish()
+    
+    logging.info(fib_chart.metadata)
+    
+    
+    
+    
+    
+@pytest.mark.special
+def test_circle_chart():
+    datawrappergraphics.CircleChart(TEST_CIRCLE_CHART).data(test_circle_chart_data).head(f"TEST: Circle chart test graphic").publish()
+
+
+
+
 
 
 def test_wrong_hexcode():
