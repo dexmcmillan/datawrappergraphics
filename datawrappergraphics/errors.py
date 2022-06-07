@@ -4,11 +4,7 @@
 # a handful of values, or your map will error out and not display anything.
 class InvalidMarkerDataError(Exception):
     
-    def __init__(self,
-                 field: str,
-                 input_value: str|int|float|bool,
-                 allowed_values_list: list
-                 ):
+    def __init__(self, field: str, input_value: str | int | float | bool, allowed_values_list: list):
         
         message = f"It looks like the {field} you provided ({input_value}) is not valid.\nPlease ensure the value is one of: {', '.join(allowed_values_list)}."
         
@@ -21,3 +17,19 @@ class InvalidHexcodeError(Exception):
     def __init__(self):
         
         super().__init__(f"The color you provided for one of your rows is not a valid 6-digit hexcode.")
+
+
+
+class InvalidExportTypeError(Exception):
+    
+    def __init__(self, allowed_values_list: list):
+        
+        super().__init__(f"The file format you specified is invalid. Please select one of:  {', '.join(allowed_values_list)}.")
+        
+        
+        
+class NoStormDataError(Exception):
+    
+    def __init__(self):
+        
+        super().__init__(f"No storm data to pull. The storm may not exist or it may have passed.")      

@@ -8,5 +8,6 @@ try:
 except PackageNotFoundError:
     __version__ = "unknown"
 
-from .__main__ import *
 from datawrappergraphics.errors import *
+from datawrappergraphics.icons import dw_icons
+from datawrappergraphics.graphics import *
