@@ -33,8 +33,20 @@ test_calendar_year_chart_data["value"] = numpy.random.randint(1, 20)
 
 @pytest.mark.special
 def test_calendar_chart():
-    month_chart = datawrappergraphics.CalendarChart(TEST_CALENDAR_MONTH_CHART).data(test_calendar_month_chart_data, date_col="date", timeframe="month").head(f"TEST: Calendar (month) chart test graphic").publish()
-    year_chart = datawrappergraphics.CalendarChart(TEST_CALENDAR_YEAR_CHART).data(test_calendar_year_chart_data, date_col="date", timeframe="year").head(f"TEST: Calendar (year) chart test graphic").publish()
+    
+    month_chart = (datawrappergraphics.CalendarChart(TEST_CALENDAR_MONTH_CHART)
+                   .data(test_calendar_month_chart_data, date_col="date", timeframe="month")
+                   .head(f"TEST: Calendar (month) chart test graphic")
+                   .publish()
+                   )
+    
+    year_chart = (datawrappergraphics.CalendarChart(TEST_CALENDAR_YEAR_CHART)
+                  .data(test_calendar_year_chart_data, date_col="date", timeframe="year")
+                  .head(f"TEST: Calendar (year) chart test graphic")
+                  .publish()
+                  )
+    
+    assert month_chart, year_chart
 
 
 
@@ -91,6 +103,7 @@ def test_simple_chart():
 
 
 @pytest.mark.quick
+@pytest.mark.maps
 def test_simple_map():
     
     assert (datawrappergraphics.Map(chart_id=TEST_MAP_ID)
@@ -128,6 +141,7 @@ def test_metadata():
 
 
 # A more robust test to make sure the most complicated map - the Eastern Ukraine map - will work.
+@pytest.mark.maps
 def test_ukraine_map():
 
     # Bring in and process shapefile data for Russian advances.
@@ -256,6 +270,7 @@ def test_ukraine_map():
 
 
 # A note that this test will work only until the storm ID is relevant. The data disappears once the storm has passed.
+@pytest.mark.maps
 def test_hurricane_map():
 
     hurricane_map = (datawrappergraphics.StormMap(chart_id=TEST_HURRICANE_MAP_ID, storm_id="AL012022", xml_url="https://www.nhc.noaa.gov/nhc_at1.xml")
@@ -271,7 +286,7 @@ def test_hurricane_map():
     
     assert hurricane_map
 
-
+@pytest.mark.maps
 def test_firemap():
 
     r = requests.get("https://services.arcgis.com/Eb8P5h4CJk8utIBz/ArcGIS/rest/services/Active_Wildfire_Locations/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=standard&distance=0.0&units=esriSRUnit_Meter&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pjson&token=")

@@ -16,7 +16,7 @@ from zipfile import ZipFile
 from urllib.request import urlopen
 from datawrappergraphics.icons import dw_icons
 from datawrappergraphics.errors import *
-
+from IPython.display import HTML
 
 
 class Graphic:
@@ -130,6 +130,13 @@ class Graphic:
         self.metadata = self._get_metadata()
 
     
+    
+    
+    def show(self):
+        
+        iframe_code = self.metadata["metadata"]["publish"]["embed-codes"]["embed-method-iframe"]
+        
+        return HTML(iframe_code)
     
     
         
