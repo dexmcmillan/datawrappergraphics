@@ -17,6 +17,7 @@ from urllib.request import urlopen
 from datawrappergraphics.icons import dw_icons
 from datawrappergraphics.errors import *
 from IPython.display import HTML
+from io import StringIO
 
 
 class Graphic:
@@ -127,6 +128,19 @@ class Graphic:
         elif chart_id != None and copy_id != None:
             raise Exception(f"Please specify either a chart_id or a copy_id, but not both.")
         
+        headers = {
+            "Accept": "*/*",
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
+        }
+        
+        if self.__class__ == Chart:
+            # Grab data from already existing chart and store it in this object.
+            r = requests.get(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers)
+            
+            if r.ok: self.dataset = pd.read_csv(StringIO(r.text), sep=";")
+            else: raise Exception(f"Couldn't get data from existing chart. Response: {r.reason}")
+        
+        # Same for metadata.
         self.metadata = self._get_metadata()
 
     
@@ -558,7 +572,7 @@ class Chart(Graphic):
             "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
         }
 
-        payload = data.to_csv()
+        payload = data.to_csv(sep=";")
         
         r = requests.put(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers, data=payload.encode('utf-8'))
 
