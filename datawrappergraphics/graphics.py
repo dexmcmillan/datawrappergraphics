@@ -127,22 +127,22 @@ class Graphic:
         # Throw exception if both copy id and chart id are input.
         elif chart_id != None and copy_id != None:
             raise Exception(f"Please specify either a chart_id or a copy_id, but not both.")
-        
-        headers = {
-            "Accept": "*/*",
-            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
-        }
-        
-        if self.__class__ == Chart:
-            # Grab data from already existing chart and store it in this object.
-            r = requests.get(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers)
-            
-            if r.ok: self.dataset = pd.read_csv(StringIO(r.text), sep=";")
-            else: raise Exception(f"Couldn't get data from existing chart. Response: {r.reason}")
-        
+
         # Same for metadata.
         self.metadata = self._get_metadata()
 
+    
+    
+    def _check_graphic_type(self, input_type: str):
+        type = self._get_metadata()["type"]
+        
+        if type == input_type:
+            return True
+        
+        else:
+            raise WrongGraphicTypeError()
+    
+    
     
     
     
@@ -541,6 +541,18 @@ class Chart(Graphic):
         
         super(Chart, self).__init__(*args, **kwargs)
         
+        headers = {
+            "Accept": "*/*",
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
+        }
+        
+        # Grab data from already existing chart and store it in this object.
+        r = requests.get(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers)
+        
+        if r.ok: self.dataset = pd.read_csv(StringIO(r.text), sep=";")
+        else: raise Exception(f"Couldn't get data from existing chart. Response: {r.reason}")
+        
+        
         
         
         
@@ -599,7 +611,13 @@ class Map(Graphic):
                  ):
         super(Map, self).__init__(*args, **kwargs)
         
+        self._check_graphic_type("locator-map")
+        
         self.icon_list = dw_icons
+        
+        # This bit of code tries to load in data from the map in the DW app, but is not working currently.
+        # markers = self.get_markers()
+        # self.dataset = pd.read_json(json.dumps(markers))
      
      
      
@@ -935,7 +953,7 @@ class StormMap(Map):
         
         # Get storm metadata.
         try: metadata = pd.read_xml(self.xml_url, xpath="/rss/channel/item[1]/nhc:Cyclone", namespaces={"nhc":"https://www.nhc.noaa.gov"})
-        except ValueError: NoStormDataError()
+        except ValueError: raise NoStormDataError()
         
         # Split the marker for the center of the storm into latitude and longitude values.
         metadata["latitude"] = pd.Series(metadata.at[0, "center"].split(",")[0].strip()).astype(float)
@@ -950,6 +968,7 @@ class StormMap(Map):
         
         # Save type of storm in object variables.
         self.storm_type = metadata.at[0, "type"]
+        
         
         # Pull in data from NOAA five day forecast shapefile.
         # This is where we get the centre line, probable path cone shape, and points in probable path.

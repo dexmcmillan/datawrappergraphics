@@ -31,6 +31,7 @@ test_calendar_month_chart_data = pd.DataFrame({"date": pd.date_range("2022-09-01
 test_calendar_year_chart_data = pd.DataFrame({"date": pd.date_range("2022-01-01", "2022-12-31")})
 test_calendar_year_chart_data["value"] = numpy.random.randint(1, 20)
 
+
 @pytest.mark.special
 def test_calendar_chart():
     
@@ -48,6 +49,10 @@ def test_calendar_chart():
     
     assert month_chart, year_chart
 
+
+def test_load_wrong_chart():
+    try: datawrappergraphics.Map(TEST_CHART_ID)
+    except WrongGraphicTypeError: assert True
 
 
 @pytest.mark.special
@@ -106,12 +111,18 @@ def test_simple_chart():
 @pytest.mark.maps
 def test_simple_map():
     
-    assert (datawrappergraphics.Map(chart_id=TEST_MAP_ID)
+    simple_map = datawrappergraphics.Map(chart_id=TEST_MAP_ID)
+    
+    logging.info(simple_map.dataset)
+    
+    simple_map = (simple_map
         .data(test_map_data)
         .head(f"TEST: Testing datawrappergraphics library")
         .deck(f"A test deck.")
         .move(folder_id=API_TEST_FOLDER)
-    )
+        )
+    
+    assert simple_map
 
 # This test changes the metadata in a test chart and update the live chart.
 @pytest.mark.quick
@@ -119,6 +130,8 @@ def test_metadata():
     chart = datawrappergraphics.Map(chart_id=TEST_MAP_ID)
     
     before = chart.metadata["metadata"]["describe"]["source-name"]
+    
+    logging.info(chart.metadata)
     
     chart.metadata["metadata"]["describe"]["source-name"] = "".join([str(x) for x in numpy.random.randint(0, 9, 5)])
     

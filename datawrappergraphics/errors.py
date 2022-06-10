@@ -32,4 +32,12 @@ class NoStormDataError(Exception):
     
     def __init__(self):
         
-        super().__init__(f"No storm data to pull. The storm may not exist or it may have passed.")      
+        super().__init__(f"No storm data to pull. The storm may not exist or it may have passed.")
+        
+        
+        
+class WrongGraphicTypeError(Exception):
+        
+    def __init__(self):
+        
+        super().__init__(f"The chart ID you've passed matches a different type of datawrapper chart. Please use the correct class (Map, Chart etc.) to load your graphic.")
