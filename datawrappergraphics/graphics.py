@@ -133,14 +133,21 @@ class Graphic:
 
     
     
-    def _check_graphic_type(self, input_type: str):
-        type = self._get_metadata()["type"]
+    
+    
+    def _check_graphic_type(self, input_type: str | list):
         
-        if type == input_type:
+        if isinstance(input_type, str):
+            input_type = []
+            
+            
+        type = self.metadata["type"]
+        
+        if type.isin(input_type):
             return True
         
         else:
-            raise WrongGraphicTypeError()
+            raise WrongGraphicTypeError(type)
     
     
     
@@ -541,6 +548,32 @@ class Chart(Graphic):
         
         super(Chart, self).__init__(*args, **kwargs)
         
+        chart_types = [
+                "d3-bars",
+                "d3-bars-split",
+                "d3-bars-stacked",
+                "d3-bars-bullet",
+                "d3-dot-plot",
+                "d3-range-plot",
+                "d3-arrow-plot",
+                "column-chart",
+                "grouped-column-chart",
+                "stacked-column-chart",
+                "d3-area",
+                "d3-lines",
+                "d3-pies",
+                "d3-donuts",
+                "d3-multiple-pies",
+                "d3-multiple-donuts",
+                "d3-scatter-plot",
+                "election-donut-chart",
+                "tables",
+                "d3-maps-choropleth",
+                "d3-maps-symbols",
+            ]
+        
+        self._check_graphic_type(chart_types)
+        
         headers = {
             "Accept": "*/*",
             "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
@@ -549,11 +582,13 @@ class Chart(Graphic):
         # Grab data from already existing chart and store it in this object.
         r = requests.get(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers)
         
-        if r.ok: self.dataset = pd.read_csv(StringIO(r.text), sep=";")
+        if r.ok: 
+            try: self.dataset = pd.read_csv(StringIO(r.text), sep=";")
+            except: self.dataset = pd.DataFrame()
         else: raise Exception(f"Couldn't get data from existing chart. Response: {r.reason}")
         
-        
-        
+    
+
         
         
         
@@ -852,6 +887,28 @@ class Map(Graphic):
 # The NOAA stores this data in at least two separate zipfiles that need to be pulled in and processed.
 class StormMap(Map):
     
+    """A special maps class for loading in NOAA hurricane center data into a locator map.
+    
+    This class is implemented by passing both an XML url and a storm ID into the constructor.
+    
+    Args:
+        storm_id (str): The ID of the storm that you want to track.
+        xml_url (str, optional): The URL of all the XML information for the hurricane.
+        chart_id (str): The ID of the chart you're bringing into the module. Providing this string value is the typical implementation of this library.
+        copy_id (str, optional): Instead of a chart_id, you can specify the id of a chart to copy. Keep in mind that this will keep making copies if you keep running code, so it's best run only once, then use chart_id.
+        auth_token (str, optional): The auth_token from Datawrapper. You can authenticate by passing this into the class instantiation, or by putting an auth.txt file in your project's root folder with the token.
+        folder_id (str, optional): If a new chart is being created because no chart_id or copy_id is passed, this is where you specify which folder to create it in.
+
+    Attributes:
+        storm_id (str): The ID of the storm in the map.
+        windspeed (str): The current windspeed.
+        storm_name (str): The name of the tracked storm.
+        storm_type (str): Is the storm currently remnants, a tropical depression, or a hurricane?
+        
+    Returns:
+        object: Returns self, the instance of the Graphic class. Can be chained with other methods.
+    """
+    
     # Some variables that we want to be able to access when the class is instantiated.
     global storm_id
     global windspeed
@@ -862,7 +919,7 @@ class StormMap(Map):
     global xml_url
     
     
-    
+    # TODO allow passing of just storm_id to track the storm, rather than XML_id as well.
     def __init__(self, storm_id: str, xml_url: str, chart_id: str = None, copy_id: str = None):
         
         # Set storm id from the input given to the class constructor.

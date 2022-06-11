@@ -38,6 +38,6 @@ class NoStormDataError(Exception):
         
 class WrongGraphicTypeError(Exception):
         
-    def __init__(self):
+    def __init__(self, type_input: str):
         
-        super().__init__(f"The chart ID you've passed matches a different type of datawrapper chart. Please use the correct class (Map, Chart etc.) to load your graphic.")
+        super().__init__(f"The chart ID you've passed is a {type_input}. Please use the correct class (Map, Chart etc.) to load your graphic.")
