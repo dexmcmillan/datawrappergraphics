@@ -3,8 +3,9 @@ from setuptools import find_packages, setup
 setup(
     name='datawrappergraphics',
     packages=find_packages(include=["datawrappergraphics"]),
-    version='0.3.26',
-    description='A pythonic representation of Datawrapper graphics.',
+    version='0.3.27',
+    url='https://github.com/dexmcmillan/datawrappergraphics',
+    description='A package for interacting with Datawrapper graphics and folders.',
     author='Dexter McMillan',
     license='MIT',
     install_requires=[
