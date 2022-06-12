@@ -8,6 +8,7 @@ An (unofficial!) package for Datawrapper that allows you to interface between yo
 INSTALLATION AND SETUP
 ======================
 Install using pip:
+
 ``pip install datawrappergraphics``
 
 Datawrappergraphics uses Datawrapper's API to interface with Datawrapper. In order to use it, you need to generate an API token with the following permissions:
