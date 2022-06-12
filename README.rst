@@ -88,13 +88,16 @@ Upload data to an existing locator map
 ==========================
 
 The Map class is used to interact with locator map data. Your dataframe has to have a few required columns:
+
 - Type: Either "point" or "area", depending on whether the row is a point marker or an area.
 - latitude/longitude or geometry: Point markers use two columns to locate: latitude and longitude. Area markers need a geometry column with WKT in the rows.
 
 When you're uploading your data, you can specify a number of optional columns to control how your marker points show:
+
 - Point markers:
     - **icon**: Specify the id of any icon available in Datawrapper's locator maps. Default: circle.
     - **markerColor**: What color the marker shows up as. Default: #C42127.
+  
 - Area markers:
     - **fill**: A 6-digit hexcode or a boolean value that controls the fill color or visibility of the marker fill. Default: #C42127.
     - **stroke**: A 6-digit hexcode or a boolean value that controls the stroke color or visibility of the marker stroke. Default: #C42127.
