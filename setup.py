@@ -5,7 +5,7 @@ setup(
     packages=find_packages(include=["datawrappergraphics"]),
     version='0.3.27',
     url='https://github.com/dexmcmillan/datawrappergraphics',
-    description='A package for interacting with Datawrapper graphics and folders.',
+    description='A package for interacting with Datawrapper maps, charts, and folders.',
     author='Dexter McMillan',
     license='MIT',
     install_requires=[

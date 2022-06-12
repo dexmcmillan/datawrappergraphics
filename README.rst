@@ -2,10 +2,7 @@
 Datawrapper Graphics
 ========================
 
-A pythonic representation of Datawrapper graphics that takes pandas Dataframes as input for charts and locator maps.
-
-[![Latest release](https://badgen.net/github/release/Naereen/Strapdown.js)](https://github.com/dexmcmillan/datawrappergraphics/releases/download/v0.3.2/datawrappergraphics-0.3.24-py3-none-any.whl)
-
+A package that allows you to interface between your pandas dataframes and Datawrapper locator maps, charts, and folders in Python.
 
 
 Installation
@@ -24,15 +21,38 @@ Each of these classes inherits from the DatawrapperGraphic class, which is not m
 
 Classes can be implemented by using:
 
-```
-import datawrappergraphics
+.. code-block:: python
 
-chart_id = "AbBe1"
+        import datawrappergraphics
 
-map = (Map()
-        .data(aPandasDataframe)
-        .head("A cool headline for your chart")
-        .deck("A great looking deck, or subheadline, for your chart".)
-        .footer("This is a note")
-)
-```
+        chart_id = "AbBe1"
+
+        map = (Map()
+                .data(aPandasDataframe)
+                .head("A cool headline for your chart")
+                .deck("A great looking deck, or subheadline, for your chart".)
+                .footer("This is a note")
+        )
+
+I want to...
+==========================
+
+Some simple usage patterns.
+
+**Create a new chart.**
+
+.. code-block:: python
+
+        import datawrappergraphics as dwg
+
+        dwg.Chart()
+
+**Upload data to an existing chart.**
+
+Data is uploaded as a pandas dataframe. Charts do not require any special columns, so go wild with it.
+
+.. code-block:: python
+
+        import datawrappergraphics as dwg
+
+        dwg.Chart(chart_id="AbCd1").data(df)
