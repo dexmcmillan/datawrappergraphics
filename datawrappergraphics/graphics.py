@@ -18,9 +18,128 @@ from datawrappergraphics.icons import dw_icons
 from datawrappergraphics.errors import *
 from IPython.display import HTML
 from io import StringIO
+from shapely.geometry import shape
 
 
-class Graphic:
+class Datawrapper:
+    
+    """The base class for Datawrapper folders and graphics.
+    
+    This holds methods that are general to interacting with Datawrapper's API, like the authentication method. This object should not be instantiated directly.
+    
+    Args:
+        auth_token (str, optional): The auth_token from Datawrapper. You can authenticate by passing this into the class instantiation, or by putting an auth.txt file in your project's root folder with the token.
+
+    Attributes:
+        DW_AUTH_TOKEN (str): Token to authenticate to Datawrapper's API.
+        path (str): Path that the script is running from using this module.
+        script_name (str): Name of the script currently running using this module.
+        _os_name (str): What operating system the script is running on.
+    """
+    
+    global DW_AUTH_TOKEN
+    global path
+    global script_name
+    global _os_name
+    
+    def __init__(self,
+                 auth_token: str = None):
+        
+        # Authenticate to datawrapper's API.
+        self.auth(token=auth_token)
+        
+        
+        # Set OS name (see global Graphic variables)
+        self._os_name = os.name
+        
+        self.script_name = os.path.basename(sys.argv[0]).replace(".py", "")
+        
+        self.path = os.path.dirname(sys.argv[0]) 
+    
+    
+    # This method authenticates to Datawrapper and returns the token for accessing the DW api.
+    def auth(self, token: str = None):
+        
+        """A mostly internal function to authenticate to Datawrapper's API.
+
+        Args:
+            token (str): If a token is specified manually, it can be passed here.
+
+        Returns:
+            object: Returns self, the instance of the Graphics class. Can be chained with other methods.
+        """
+        
+        if token != None:
+            DW_AUTH_TOKEN = token
+        else:
+            # On a local machine, it will read the auth.txt file for the token.
+            try:
+                with open('./auth.txt', 'r') as f:
+                    DW_AUTH_TOKEN = f.read().strip()
+            # If this is run using Github actions, it will take a secret from the repo instead.
+            except FileNotFoundError:
+                try: DW_AUTH_TOKEN = os.environ['DW_AUTH_TOKEN']
+                except: raise Exception(f"No auth.txt file found, and no environment variable specified for DW_AUTH_TOKEN. Please add one of the two to authenticate to Datawrapper's API.")
+        
+        self.DW_AUTH_TOKEN = DW_AUTH_TOKEN    
+        return self 
+
+
+
+
+class Folder(Datawrapper):
+    
+    """The base class for a Datawrapper folder.
+    
+    
+    Args:
+        folder_id (str): The ID of the folder.
+
+    Attributes:
+        folder_id (str): The id of the folder fetched.
+        chart_list (list): A list of charts in the folder.
+        num_charts (int): The number of charts in this folder.
+        
+    Returns:
+        object: A datawrapper Folder object.
+    """
+    
+    global folder_id
+    global num_charts
+    global chart_list
+    
+    def __init__(self,
+                 folder_id: str,
+                 *args,
+                 **kwargs):
+        
+        super(Folder, self).__init__(*args, **kwargs)
+        
+        # Set folder ID from arg.
+        self.folder_id = folder_id
+        self.num_charts = len(self.folder_id)
+        
+        # Run a small funtion to collect the chart IDs of charts in the folder.
+        self.chart_list = self._get_chart_list()
+        
+        
+        
+        
+    def _get_chart_list(self):
+        
+        headers = {
+            "Accept": "*/*",
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
+        }
+        
+        r = requests.get(f"https://api.datawrapper.de/v3/charts?folderId={self.folder_id}&order=DESC&orderBy=createdAt&offset=0&expand=true", headers=headers)
+        
+        if r.ok: return [obj["publicId"] for obj in r.json()["list"]]
+        else: raise Exception(f"Couldn't fetch charts. Response: {r.reason}")
+
+
+
+class Graphic(Datawrapper):
     
     """The base class for Datawrapper graphics.
     
@@ -55,28 +174,18 @@ class Graphic:
     global CHART_ID
     global metadata
     global dataset
-    global DW_AUTH_TOKEN
-    global path
-    global script_name
-    global _os_name
     
     def __init__(self,
                  chart_id: str = None,
                  copy_id: str = None,
-                 auth_token: str = None,
                  folder_id: str = None):
+        
         
         # Turn on logging of INFO level.
         logging.basicConfig(level=logging.INFO)
         
-        # Set OS name (see global Graphic variables)
-        self._os_name = os.name
         
-        self.script_name = os.path.basename(sys.argv[0]).replace(".py", "")
-        
-        self.path = os.path.dirname(sys.argv[0]) 
-        
-        self.auth(token=auth_token)
+        super(Graphic, self).__init__()
         
         
         
@@ -138,12 +247,12 @@ class Graphic:
     def _check_graphic_type(self, input_type: str | list):
         
         if isinstance(input_type, str):
-            input_type = []
+            input_type = [input_type]
             
             
         type = self.metadata["type"]
         
-        if type.isin(input_type):
+        if type in input_type:
             return True
         
         else:
@@ -397,33 +506,30 @@ class Graphic:
     
     
     
-    
-    # This method authenticates to Datawrapper and returns the token for accessing the DW api.
-    def auth(self, token: str = None):
+    def unpublish(self):
         
-        """A mostly internal function to authenticate to Datawrapper's API.
+        """Unpublishes your graphic.
 
         Args:
-            token (str): If a token is specified manually, it can be passed here.
+            None
 
         Returns:
             object: Returns self, the instance of the Graphics class. Can be chained with other methods.
         """
+
+        headers = {
+            "Accept": "*/*", 
+            "Authorization": f"Bearer {self.DW_AUTH_TOKEN}"
+            }
+
+        r = requests.post(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/unpublish", headers=headers)
         
-        if token != None:
-            DW_AUTH_TOKEN = token
-        else:
-            # On a local machine, it will read the auth.txt file for the token.
-            try:
-                with open('./auth.txt', 'r') as f:
-                    DW_AUTH_TOKEN = f.read().strip()
-            # If this is run using Github actions, it will take a secret from the repo instead.
-            except FileNotFoundError:
-                try: DW_AUTH_TOKEN = os.environ['DW_AUTH_TOKEN']
-                except: raise Exception(f"No auth.txt file found, and no environment variable specified for DW_AUTH_TOKEN. Please add one of the two to authenticate to Datawrapper's API.")
+        if r.ok: logging.info(f"SUCCESS: Chart unpublished.")
+        else: raise Exception(f"ERROR: Chart couldn't be unpublished. Response: {r.reason}")
         
-        self.DW_AUTH_TOKEN = DW_AUTH_TOKEN    
-        return self 
+        return self
+    
+    
     
 
     
@@ -651,8 +757,32 @@ class Map(Graphic):
         self.icon_list = dw_icons
         
         # This bit of code tries to load in data from the map in the DW app, but is not working currently.
-        # markers = self.get_markers()
-        # self.dataset = pd.read_json(json.dumps(markers))
+        # markers = [self.get_markers()]
+        
+        # dfs = []
+        
+        # for marker in markers:
+        #     df = pd.DataFrame({'id': [marker["id"]]})
+            
+        #     df["type"] = marker["type"]
+                          
+        #     for property in ["id", "title", "icon", "scale", "markerColor", "markerSymbol", "anchor", "visible"]:
+        #         df[property] = marker[property] if hasattr(marker, property) else np.nan
+            
+        #     if marker["type"] == "point":
+                
+        #         df["tooltip"] = marker["tooltip"]["text"]
+        #         df["latitude"] = marker["coordinates"][1]
+        #         df["longitude"] = marker["coordinates"][0]
+        #         df["icon"] = marker["icon"]["id"]
+                
+        #     else:
+        #         try: df["geometry"] = shape(marker["feature"]["geometry"]).wkt
+        #         except KeyError: df["geometry"] = shape(marker["features"]["feature"])
+            
+        #     dfs.append(df)
+            
+        # self.dataset = pd.concat(dfs)
      
      
      
@@ -1136,9 +1266,9 @@ class FibonacciChart(Chart):
         object: Returns self, the instance of the Graphic class. Can be chained with other methods.
     """
     
-    def __init__(self, chart_id: str = None, copy_id: str = None, auth_token: str = None, folder_id: str = None):
+    def __init__(self, chart_id: str = None, copy_id: str = None, folder_id: str = None):
         
-        super().__init__(chart_id, copy_id, auth_token, folder_id)
+        super().__init__(chart_id, copy_id, folder_id)
         
         
     def data(self, input_data: pd.DataFrame):

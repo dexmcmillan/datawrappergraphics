@@ -32,6 +32,12 @@ test_calendar_year_chart_data = pd.DataFrame({"date": pd.date_range("2022-01-01"
 test_calendar_year_chart_data["value"] = numpy.random.randint(1, 20)
 
 
+@pytest.mark.folder
+def test_get_folder():
+    assert datawrappergraphics.Folder(API_TEST_FOLDER).chart_list
+
+
+
 @pytest.mark.special
 def test_calendar_chart():
     
@@ -112,8 +118,6 @@ def test_simple_chart():
 def test_simple_map():
     
     simple_map = datawrappergraphics.Map(chart_id=TEST_MAP_ID)
-    
-    logging.info(simple_map.dataset)
     
     simple_map = (simple_map
         .data(test_map_data)
