@@ -93,13 +93,13 @@ The Map class is used to interact with locator map data. Your dataframe has to h
 
 When you're uploading your data, you can specify a number of optional columns to control how your marker points show:
 - Point markers:
-  - **icon**: Specify the id of any icon available in Datawrapper's locator maps. Default: circle.
-  - **markerColor**: What color the marker shows up as. Default: #C42127.
+    - **icon**: Specify the id of any icon available in Datawrapper's locator maps. Default: circle.
+    - **markerColor**: What color the marker shows up as. Default: #C42127.
 - Area markers:
-  - **fill**: A 6-digit hexcode or a boolean value that controls the fill color or visibility of the marker fill. Default: #C42127.
-  - **stroke**: A 6-digit hexcode or a boolean value that controls the stroke color or visibility of the marker stroke. Default: #C42127.
-  - **fill-opacity**: A float value that controls the opacity of the fill. Default: 0.5.
-  - **stroke-opacity**: A float value that controls the opacity of the stroke. Default: 1.0.
+    - **fill**: A 6-digit hexcode or a boolean value that controls the fill color or visibility of the marker fill. Default: #C42127.
+    - **stroke**: A 6-digit hexcode or a boolean value that controls the stroke color or visibility of the marker stroke. Default: #C42127.
+    - **fill-opacity**: A float value that controls the opacity of the fill. Default: 0.5.
+    - **stroke-opacity**: A float value that controls the opacity of the stroke. Default: 1.0.
 
 The names of all columns are **case sensitive**!
 
