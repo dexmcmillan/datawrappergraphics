@@ -12,11 +12,13 @@ Install using pip:
 ``pip install datawrappergraphics``
 
 Datawrappergraphics uses Datawrapper's API to interface with Datawrapper. In order to use it, you need to generate an API token with the following permissions:
+
 - Auth: read/write
 - Chart: read/write
 - Folder: read/write
 
 This token can be generated in *settings > API-Tokens*. There are three ways to authenticate:
+
 1. By default, Datawrappergraphics will look for an environment variable called ``DW_AUTH_TOKEN``.
 2. You can upload a ``auth.txt`` file in your project's root directory containing only your authentication key (don't forget to add this file to your .gitignore!).
 3. You can pass your token on instantiation using the ``auth_token`` arg.
