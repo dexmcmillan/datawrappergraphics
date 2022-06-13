@@ -174,11 +174,13 @@ class Graphic(Datawrapper):
     global CHART_ID
     global metadata
     global dataset
+    global allowed_chart_types
     
     def __init__(self,
                  chart_id: str = None,
                  copy_id: str = None,
-                 folder_id: str = None):
+                 folder_id: str = None,
+                 chart_type: str = None):
         
         
         # Turn on logging of INFO level.
@@ -187,7 +189,29 @@ class Graphic(Datawrapper):
         
         super(Graphic, self).__init__()
         
-        
+        self.allowed_chart_types = [
+                "d3-bars",
+                "d3-bars-split",
+                "d3-bars-stacked",
+                "d3-bars-bullet",
+                "d3-dot-plot",
+                "d3-range-plot",
+                "d3-arrow-plot",
+                "column-chart",
+                "grouped-column-chart",
+                "stacked-column-chart",
+                "d3-area",
+                "d3-lines",
+                "d3-pies",
+                "d3-donuts",
+                "d3-multiple-pies",
+                "d3-multiple-donuts",
+                "d3-scatter-plot",
+                "election-donut-chart",
+                "tables",
+                "d3-maps-choropleth",
+                "d3-maps-symbols",
+            ]
         
         # Define common headers for all the below options for instantiating Datawrapper graphics.
         headers = {
@@ -207,7 +231,12 @@ class Graphic(Datawrapper):
                 
             # Otherwise, just send an empty payload.    
             else:
-                payload = {}
+                
+                if chart_type in self.allowed_chart_types + ["locator-map"]:
+                    payload = {"type": chart_type}
+                else:
+                    logging.warning(f"Invalid or no chart type specified. Creating new chart as a line chart instead.")
+                    payload = {"type": "d3-lines"}
             
             response = requests.post(f"https://api.datawrapper.de/v3/charts/", json=payload, headers=headers)
             chart_id = response.json()["publicId"]
@@ -464,7 +493,7 @@ class Graphic(Datawrapper):
         r = requests.patch(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers, data=json.dumps(data))
         
         if r.ok: logging.info(f"SUCCESS: Chart footer (byline, notes, and source) built and added.")
-        else: raise Exception(f"ERROR: Couldn't build chart footer. Response: {r.reason}")
+        else: raise DatawrapperAPIError(f"ERROR: Couldn't build chart footer. Response: {r.reason}")
         
         # Update the object's metadat representation.
         self.metadata = r.json()
@@ -498,7 +527,7 @@ class Graphic(Datawrapper):
         r = requests.post(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/publish", headers=headers)
         
         if r.ok: logging.info(f"SUCCESS: Chart published!")
-        else: raise Exception(f"ERROR: Chart couldn't be published. Response: {r.reason}")
+        else: raise DatawrapperAPIError(f"ERROR: Chart couldn't be published. Response: {r.reason}")
         
         return self
     
@@ -525,7 +554,7 @@ class Graphic(Datawrapper):
         r = requests.post(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/unpublish", headers=headers)
         
         if r.ok: logging.info(f"SUCCESS: Chart unpublished.")
-        else: raise Exception(f"ERROR: Chart couldn't be unpublished. Response: {r.reason}")
+        else: raise DatawrapperAPIError(f"ERROR: Chart couldn't be unpublished. Response: {r.reason}")
         
         return self
     
@@ -561,7 +590,7 @@ class Graphic(Datawrapper):
         r = requests.patch(f"https://api.datawrapper.de/v3/charts", json=payload, headers=headers)
         
         if r.ok: logging.info(f"SUCCESS: Chart moved to folder ID {folder_id}!")
-        else: raise Exception(f"ERROR: Chart couldn't be moved. Response: {r.reason}")
+        else: raise DatawrapperAPIError(f"ERROR: Chart couldn't be moved. Response: {r.reason}")
         
         return self
     
@@ -591,7 +620,7 @@ class Graphic(Datawrapper):
         r = requests.delete(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}", headers=headers)
         
         if r.ok: logging.info(f"SUCCESS: Chart published!")
-        else: raise Exception(f"ERROR: Chart couldn't be deleted. Response: {r.reason}")
+        else: raise DatawrapperAPIError(f"ERROR: Chart couldn't be deleted. Response: {r.reason}")
         
         return self
     
@@ -631,7 +660,7 @@ class Graphic(Datawrapper):
             with open(file_path, "wb") as response:
                 response.write(export_chart_response.content)
                 
-        else: raise Exception(f"ERROR: Chart couldn't be exported as {format}. Response: {export_chart_response.reason}")
+        else: raise DatawrapperAPIError(f"ERROR: Chart couldn't be exported as {format}. Response: {export_chart_response.reason}")
         
         return self
 
@@ -654,31 +683,7 @@ class Chart(Graphic):
         
         super(Chart, self).__init__(*args, **kwargs)
         
-        chart_types = [
-                "d3-bars",
-                "d3-bars-split",
-                "d3-bars-stacked",
-                "d3-bars-bullet",
-                "d3-dot-plot",
-                "d3-range-plot",
-                "d3-arrow-plot",
-                "column-chart",
-                "grouped-column-chart",
-                "stacked-column-chart",
-                "d3-area",
-                "d3-lines",
-                "d3-pies",
-                "d3-donuts",
-                "d3-multiple-pies",
-                "d3-multiple-donuts",
-                "d3-scatter-plot",
-                "election-donut-chart",
-                "tables",
-                "d3-maps-choropleth",
-                "d3-maps-symbols",
-            ]
-        
-        self._check_graphic_type(chart_types)
+        self._check_graphic_type(self.allowed_chart_types)
         
         headers = {
             "Accept": "*/*",
@@ -730,7 +735,7 @@ class Chart(Graphic):
         r = requests.put(f"https://api.datawrapper.de/v3/charts/{self.CHART_ID}/data", headers=headers, data=payload.encode('utf-8'))
 
         if r.ok: logging.info(f"SUCCESS: Data added to chart.")
-        else: raise Exception(f"Chart data couldn't be added. Response: {r.reason}")
+        else: raise DatawrapperAPIError(f"Chart data couldn't be added. Response: {r.reason}")
         
         return self
     
@@ -825,7 +830,7 @@ class Map(Graphic):
             
             # Check if a marker type is specified. Throw an error if it's not provided.
             try: marker_type = feature["type"]
-            except: raise Exception(f"Please specify a marker type for all rows in your Dataframe.")
+            except: raise MissingDataError(f"Please specify a marker type for all rows in your Dataframe.")
             
             # Check to make sure values that have an allowed list above are correctly entered, and throw an error if they're not.
             for marker_property, _list in ALLOWED_VALUES.items():
@@ -897,9 +902,9 @@ class Map(Graphic):
                     new_feature["coordinates"] = [feature["longitude"], feature["latitude"]]
                 elif hasattr(feature, "geometry"):
                     try: new_feature["coordinates"] = [float(feature["geometry"].x), float(feature["geometry"].y)]
-                    except: raise Exception(f"There was an issue with converting geometry column coordinates into coordinates. Please ensure geometry for point markers is a WKT of type Point.")
+                    except: raise GeometryError(f"There was an issue with converting geometry column coordinates into coordinates. Please ensure geometry for point markers is a WKT of type Point.")
                 else:
-                    raise Exception(f'No geometry or latitude and longitude columns found in input data.')
+                    raise MissingDataError(f'No geometry or latitude and longitude columns found in input data.')
             
             
             

@@ -41,3 +41,27 @@ class WrongGraphicTypeError(Exception):
     def __init__(self, type_input: str):
         
         super().__init__(f"The chart ID you've passed is a {type_input}. Please use the correct class (Map, Chart etc.) to load your graphic.")
+        
+        
+class MissingDataError(Exception):
+        
+    def __init__(self, msg: str):
+        
+        super().__init__(msg)
+        
+        
+class GeometryError(Exception):
+        
+    def __init__(self, msg: str = None):
+        
+        if msg != None:
+            msg = f"There was a problem with your geometry. Please check that you've provided a latitude and longitude or geometry column."
+        
+        super().__init__(msg)
+        
+        
+class DatawrapperAPIError(Exception):
+        
+    def __init__(self, msg: str = None):
+        
+        super().__init__(msg)

@@ -76,8 +76,13 @@ def test_circle_chart():
     datawrappergraphics.CircleChart(TEST_CIRCLE_CHART).data(test_circle_chart_data).head(f"TEST: Circle chart test graphic").publish()
 
 
-
-
+@pytest.mark.quick
+def test_wrong_chart_type():
+    
+    wrong_type = datawrappergraphics.Chart(chart_type="laksfd").delete()
+    right_type = datawrappergraphics.Chart(chart_type="d3-bars").delete()
+    
+    assert wrong_type and right_type
 
 
 def test_wrong_hexcode():
