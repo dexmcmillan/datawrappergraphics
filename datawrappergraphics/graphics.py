@@ -754,6 +754,8 @@ class Chart(Graphic):
         if r.ok: logging.info(f"SUCCESS: Data added to chart.")
         else: raise DatawrapperAPIError(f"Chart data couldn't be added. Response: {r.reason}")
         
+        self.set_metadata()
+        
         return self
     
 
@@ -956,15 +958,15 @@ class Map(Graphic):
                     "title": feature["title"] if "title" in input_data and not pd.isna(feature["title"]) else "",
                     "visible": feature["visible"] if "visible" in input_data and not pd.isna(feature["visible"]) else True,
                     "fill": feature["fill"] if "fill" in input_data and not pd.isna(feature["fill"])and isinstance(feature["fill"], bool) else True,
-                    "stroke": feature["stroke"] if "stroke" in input_data  and not pd.isna(feature["stroke"]) and isinstance(feature["fill"], bool) else True,
+                    "stroke": feature["stroke"] if "stroke" in input_data and not pd.isna(feature["stroke"]) and isinstance(feature["stroke"], bool) else True,
                     "exactShape": False,
                     "highlight": False,
                     "markerColor": feature["markerColor"] if "markerColor" in input_data and not pd.isna(feature["markerColor"]) else "#C42127",
                     "properties": {
                         "fill": feature["fill"] if "fill" in input_data and not pd.isna(feature["fill"]) and isinstance(feature["fill"], str) else "#C42127",
                         "fill-opacity": feature["fill-opacity"] if ("fill-opacity" in feature and feature["fill-opacity"] and not pd.isna(feature["fill-opacity"])) else 0.3,
-                        "stroke": feature["stroke"] if "stroke" in input_data and not pd.isna(feature["stroke"]) and isinstance(feature["fill"], str) else "#000000",
-                        "stroke-width": 1,
+                        "stroke": feature["stroke"] if "stroke" in input_data and not pd.isna(feature["stroke"]) and isinstance(feature["stroke"], str) else "#000000",
+                        "stroke-width": feature["stroke-width"] if ("stroke-width" in feature and feature["stroke-width"] and not pd.isna(feature["stroke-width"])) else 1,
                         "stroke-opacity": feature["stroke-opacity"] if ("stroke-opacity" in feature and feature["stroke-opacity"] and not pd.isna(feature["stroke-opacity"])) else 0.7,
                         "stroke-dasharray": feature["stroke-dasharray"] if "stroke-dasharray" in input_data and not pd.isna(feature["stroke-dasharray"]) else "100000",
                         "pattern": "solid",
@@ -1023,6 +1025,9 @@ class Map(Graphic):
 
         if r.ok: logging.info(f"SUCCESS: Data added to chart.")
         else: raise Exception(f"ERROR: Chart data couldn't be added. Response: {r.reason}")
+        
+        # Push any metadata changes with the new data.
+        self.set_metadata()
         
         return self
     
@@ -1220,7 +1225,7 @@ class StormMap(Map):
         
         # String together a title from information in each row.
         points['DATELBL'] = pd.to_datetime(points['DATELBL'])
-        points["title"] = points['DATELBL'].dt.strftime("%A") + "<br>" + points['DATELBL'].dt.strftime("%I:%M %p").replace("<br>0", "<br>")
+        # points["title"] = points['DATELBL'].dt.strftime("%A") + "<br>" + points['DATELBL'].dt.strftime("%I:%M %p").replace("<br>0", "<br>")
         
         # Marker symbols are the little letters in each point marker.
         points["markerSymbol"] = points["DVLBL"]
@@ -1236,14 +1241,23 @@ class StormMap(Map):
         points.loc[points["DVLBL"] == "H", "storm_type"] = "Hurricane"
         points.loc[points["DVLBL"] == "S", "storm_type"] = "Storm"
         
+        # This checks os, and returns a leading character to remove 0 from strftime.
+        # On windows, you have to use #. On Linux and Mac, it's a hyphen.
+        if self._os_name == "nt":
+            leading_char = "#"
+        else:
+            leading_char = "-"
+        
         # Put together the tooltip for each map point.
-        points["tooltip"] = "On " + points['DATELBL'].dt.strftime("%b %e") + " at " + points['DATELBL'].dt.strftime("%I:%M %p").str.replace(" 0", "", regex=True) + " EST, the storm is projected to be classified as a " + points["storm_type"].str.lower() + "."
+        points["tooltip"] = "On " + points['DATELBL'].dt.strftime("%b %e") + " at " + points['DATELBL'].dt.strftime("%" + leading_char + "I:%M %p").str.replace(" 0", "", regex=True) + " EST, the storm is projected to be classified as a " + points["storm_type"].str.lower() + "."
         
         # Get center line layer from five day forecast shapefile.
         centre_line = self.__get_shapefile(five_day_latest_filename, "5day_lin.shp$")
         
         # Define properties unique to centre line.
+        
         centre_line["stroke"] = "#000000"
+        centre_line["stroke-width"] = 2.0
         centre_line["fill"] = False
         centre_line["title"] = "Probable path centre line"
         
@@ -1267,7 +1281,8 @@ class StormMap(Map):
         
         # Set some attributes that are required by the data() method for areas that will eventually be called on this dataset.
         historical_path["stroke"] = "#000000"
-        historical_path["stroke-dasharray"] = "1,2.2"
+        historical_path["stroke-dasharray"] = "3,2.2"
+        historical_path["stroke-width"] = 2.0
         historical_path["fill"] = False
         
         # Dissolve several features of this line into one long line, as the individual segments are not of interest to us.
