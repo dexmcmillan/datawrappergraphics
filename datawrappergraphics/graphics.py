@@ -18,7 +18,7 @@ from datawrappergraphics.icons import dw_icons
 from datawrappergraphics.errors import *
 from IPython.display import HTML
 from io import StringIO
-from shapely.geometry import shape
+from shapely.geometry import shape, Point
 
 
 class Datawrapper:
@@ -275,9 +275,17 @@ class Graphic(Datawrapper):
     
     def _check_graphic_type(self, input_type: str | list):
         
+        """Checks if the graphic is the right type to be loaded into a class.
+        
+        Args:
+            input_type (str): The type of graphic to validate.
+            
+        Returns:
+            bool: Returns True if it's a valid map type, otherwise raises an error.
+        """
+        
         if isinstance(input_type, str):
             input_type = [input_type]
-            
             
         type = self.metadata["type"]
         
@@ -292,6 +300,15 @@ class Graphic(Datawrapper):
     
     
     def show(self):
+        
+        """Returns an HTML Iframe of the datawrapper chart for showing in Jupyter notebooks.
+        
+        Args:
+            None
+            
+        Returns:
+            HTML: Returns HTML that can be loaded in Jupyter notebook output.
+        """
         
         iframe_code = self.metadata["metadata"]["publish"]["embed-codes"]["embed-method-iframe"]
         
@@ -804,12 +821,21 @@ class Map(Graphic):
      
      
      
-    # This method handles the majority of the heavy lifting for map data.
-    # In essence, it converts either a pd.DataFrame or a geopandas.GeoDataFrame to a GEOJson object, then
-    # replaces values in a template with custom values specified in the dataframe.
+    
     def data(self,
              input_data: pd.DataFrame | geopandas.GeoDataFrame,
              append: str = None):
+        
+        """Uploads your data the map as markers.
+        
+        This method handles the majority of the heavy lifting for map data. In essence, it converts either a pd.DataFrame or a geopandas.GeoDataFrame to a GEOJson object, then replaces values in a template with custom values specified in the dataframe.
+        
+        Args:
+            input_data (pd.DataFrame): The dataframe that you ultimately want to upload.
+
+        Returns:
+            object: Returns the datawrapper graphic object so methods can be chained.
+        """
         
         # New list for storing the altered geojson.
         new_features = []
@@ -830,7 +856,22 @@ class Map(Graphic):
             
             # Check if a marker type is specified. Throw an error if it's not provided.
             try: marker_type = feature["type"]
-            except: raise MissingDataError(f"Please specify a marker type for all rows in your Dataframe.")
+            
+            # This bit of code checks a few things to define default marker types (points or areas).
+            except: 
+                # If there's a defined geometry property that's not a point, it's an area.
+                if "geometry" in feature and not pd.isna(feature["geometry"]) and not isinstance(feature["geometry"], Point):
+                    marker_type = "area"
+                    
+                # If there's a latitude column and a longitude value, OR if there's a Point feature provided, it's a point.
+                elif ("latitude" in feature and "longitude" in feature and not pd.isna(feature["latitude"]) and not pd.isna(feature["longitude"])) or "geometry" in feature and isinstance(feature["geometry"], Point):
+                    marker_type = "point"
+                    
+                    feature["longitude"] = float(feature["geometry"].x)
+                    feature["latitude"] = float(feature["geometry"].y)
+                # If none of these things, then the marker type cannot be inferred, and we raise an error.    
+                else:
+                    raise MissingDataError(f"Type of marker cannot be inferred from data provided. Please specify a marker type for all rows in your Dataframe.")
             
             # Check to make sure values that have an allowed list above are correctly entered, and throw an error if they're not.
             for marker_property, _list in ALLOWED_VALUES.items():
@@ -1278,7 +1319,7 @@ class FibonacciChart(Chart):
         
     def data(self, input_data: pd.DataFrame):
         
-        """A graphic that plots your dataframe into a Fibonacci spiral (a Datawrapper scatterplot).
+        """Uploads your data and applies fibonacci coordinates to each point.
         
         Args:
             input_data (pd.DataFrame): The dataframe that you ultimately want to plat on a fibonacci chart.
