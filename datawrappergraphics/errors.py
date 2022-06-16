@@ -32,7 +32,7 @@ class NoStormDataError(Exception):
     
     def __init__(self):
         
-        super().__init__(f"No storm data to pull. The storm may not exist or it may have passed.")
+        super().__init__(f"Invalid storm ID. Check that you've entered it correctly.")
         
         
         

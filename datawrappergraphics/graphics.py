@@ -1026,8 +1026,6 @@ class Map(Graphic):
         if r.ok: logging.info(f"SUCCESS: Data added to chart.")
         else: raise Exception(f"ERROR: Chart data couldn't be added. Response: {r.reason}")
         
-        # Push any metadata changes with the new data.
-        self.set_metadata()
         
         return self
     
@@ -1074,7 +1072,7 @@ class StormMap(Map):
     
     Args:
         storm_id (str): The ID of the storm that you want to track.
-        xml_url (str, optional): The URL of all the XML information for the hurricane.
+        active (bool): Whether or not the storm is still active.
         chart_id (str): The ID of the chart you're bringing into the module. Providing this string value is the typical implementation of this library.
         copy_id (str, optional): Instead of a chart_id, you can specify the id of a chart to copy. Keep in mind that this will keep making copies if you keep running code, so it's best run only once, then use chart_id.
         auth_token (str, optional): The auth_token from Datawrapper. You can authenticate by passing this into the class instantiation, or by putting an auth.txt file in your project's root folder with the token.
@@ -1095,17 +1093,17 @@ class StormMap(Map):
     global windspeed
     global storm_name
     global storm_type
-    
-    # The url from which the data originates. An arg for creating a StormMap.
-    global xml_url
+    global active
     
     
     # TODO allow passing of just storm_id to track the storm, rather than XML_id as well.
-    def __init__(self, storm_id: str, xml_url: str, chart_id: str = None, copy_id: str = None):
+    def __init__(self, storm_id: str, chart_id: str = None, copy_id: str = None):
         
         # Set storm id from the input given to the class constructor.
-        self.storm_id = storm_id
-        self.xml_url = xml_url
+        if isinstance(storm_id, str):
+            self.storm_id = [storm_id]
+        else:
+            self.storm_id = storm_id
         
         super().__init__(chart_id, copy_id)
     
@@ -1188,118 +1186,141 @@ class StormMap(Map):
     
     # This method is a custom version of Map's data() method, which is then called after calling this.
     def data(self):
+            
+        markers_list = []
         
-        # Get storm metadata.
-        try: metadata = pd.read_xml(self.xml_url, xpath="/rss/channel/item[1]/nhc:Cyclone", namespaces={"nhc":"https://www.nhc.noaa.gov"})
-        except ValueError: raise NoStormDataError()
-        
-        # Split the marker for the center of the storm into latitude and longitude values.
-        metadata["latitude"] = pd.Series(metadata.at[0, "center"].split(",")[0].strip()).astype(float)
-        metadata["longitude"] = pd.Series(metadata.at[0, "center"].split(",")[1].strip()).astype(float)
-        
-        # Save windspeed in object variables.
-        self.windspeed = metadata.at[0, "wind"].replace(" mph", "")
-        self.windspeed = int(int(self.windspeed) * 1.60934)
-        
-        # Save name of storm in object variables.
-        self.storm_name = metadata.at[0, "name"]
-        
-        # Save type of storm in object variables.
-        self.storm_type = metadata.at[0, "type"]
-        
-        
-        # Pull in data from NOAA five day forecast shapefile.
-        # This is where we get the centre line, probable path cone shape, and points in probable path.
-        five_day_latest_filename = f"https://www.nhc.noaa.gov/gis/forecast/archive/{self.storm_id}_5day_latest.zip"
-        
-        # Get points layer from five day forecast shapefile.
-        points = self.__get_shapefile(five_day_latest_filename, "5day_pts.shp$")
-        
-        # Start by processing the points shapefile
-        points["longitude"] = points["geometry"].x.astype(float)
-        points["latitude"] = points["geometry"].y.astype(float)
-        points = points.drop(columns=["geometry"])
-        
-        # Define necessary info for point markers.
-        points["type"] = "point"
-        
-        # String together a title from information in each row.
-        points['DATELBL'] = pd.to_datetime(points['DATELBL'])
-        # points["title"] = points['DATELBL'].dt.strftime("%A") + "<br>" + points['DATELBL'].dt.strftime("%I:%M %p").replace("<br>0", "<br>")
-        
-        # Marker symbols are the little letters in each point marker.
-        points["markerSymbol"] = points["DVLBL"]
-        
-        # Define colors based on the letters we use to mark each point.
-        points["markerColor"] = points["markerSymbol"].replace({"D": "#567282", "S": "#567282", "H": "#e06618"})
-        
-        # Define label anchors.
-        points["anchor"] = "middle-left"
-        
-        # Define a written out version of what kind of storm it is at each point for use in the tooltip.
-        points.loc[points["DVLBL"] == "D", "storm_type"] = "Depression"
-        points.loc[points["DVLBL"] == "H", "storm_type"] = "Hurricane"
-        points.loc[points["DVLBL"] == "S", "storm_type"] = "Storm"
-        
-        # This checks os, and returns a leading character to remove 0 from strftime.
-        # On windows, you have to use #. On Linux and Mac, it's a hyphen.
-        if self._os_name == "nt":
-            leading_char = "#"
-        else:
-            leading_char = "-"
-        
-        # Put together the tooltip for each map point.
-        points["tooltip"] = "On " + points['DATELBL'].dt.strftime("%b %e") + " at " + points['DATELBL'].dt.strftime("%" + leading_char + "I:%M %p").str.replace(" 0", "", regex=True) + " EST, the storm is projected to be classified as a " + points["storm_type"].str.lower() + "."
-        
-        # Get center line layer from five day forecast shapefile.
-        centre_line = self.__get_shapefile(five_day_latest_filename, "5day_lin.shp$")
-        
-        # Define properties unique to centre line.
-        
-        centre_line["stroke"] = "#000000"
-        centre_line["stroke-width"] = 2.0
-        centre_line["fill"] = False
-        centre_line["title"] = "Probable path centre line"
-        
-        # Get probable path layer from five day forecast shapefile.
-        # This layer is the cone that shows where the storm may move next.
-        probable_path = self.__get_shapefile(five_day_latest_filename, "5day_pgn.shp$")
-        
-        # Define properties unique to probable path shape.
-        probable_path["fill"] = "#6a3d99"
-        probable_path["stroke"] = False
-        probable_path["fill-opacity"] = 0.3
-        probable_path["title"] = "Probable path"
-        
-        # Call the method that returns our total path information. This holds historical info about where the hurricane has been.
-        # TODO add point information back into historical path?
-        # total_path = self.__total_path(storm_id=self.storm_id)
-        
-        # Get the best track zipfile that contains the shapefile about the historical path of the storm.
-        best_track_zip = f"https://www.nhc.noaa.gov/gis/best_track/{self.storm_id}_best_track.zip"
-        historical_path = self.__get_shapefile(best_track_zip, "lin.shp$")
-        
-        # Set some attributes that are required by the data() method for areas that will eventually be called on this dataset.
-        historical_path["stroke"] = "#000000"
-        historical_path["stroke-dasharray"] = "3,2.2"
-        historical_path["stroke-width"] = 2.0
-        historical_path["fill"] = False
-        
-        # Dissolve several features of this line into one long line, as the individual segments are not of interest to us.
-        historical_path = historical_path.dissolve(by='STORMNUM')
-        
-        # Concatenate all our area markers together so we can define some common characteristics.
-        shapes = pd.concat([centre_line, probable_path, historical_path])
-        
-        # Define some common style points for the centre line and the probable path.
-        shapes["icon"] = "area"
-        shapes["type"] = "area"
-        
-        # Concatenate areas and points into one large dataframe so we can upload it.
-        markers = pd.concat([shapes, points])
+        for storm_id in self.storm_id:
+            # Get storm metadata.
+            folder = storm_id[:-4].upper()
+            
+            # There are some issues with the folders of NOAA following naming conventions. This should fix it.
+            if folder[:2] == "AL":
+                folder = folder.replace("AL", "AT")
+            
+            filename = f"https://www.nhc.noaa.gov/storm_graphics/{folder}/atcf-{storm_id.lower()}.xml"
+            
+            try: metadata = pd.read_xml(filename, xpath="/cycloneMessage")
+            except urllib.error.HTTPError: raise NoStormDataError()
+            
+            metadata.columns = metadata.columns.str.strip()
+            # Split the marker for the center of the storm into latitude and longitude values.
+            metadata = metadata.rename(columns={"centerLocLongitude": "longitude",
+                                        "centerLocLatitude": "latitude",
+                                        "systemSpeedKph": "windspeed",
+                                        "systemName": "name",
+                                        "systemType": "type"
+                                        })
+            
+            # Save windspeed in object variables.
+            self.windspeed = metadata.at[0, "windspeed"]
+            
+            # Save name of storm in object variables.
+            self.storm_name = metadata.at[0, "name"].capitalize()
+            
+            # Save type of storm in object variables.
+            self.storm_type = metadata.at[0, "type"]
+            
+            if self.storm_type == "REMNANTS OF":
+                self.active = False
+            else:
+                self.active = True
+            
+            
+            # Pull in data from NOAA five day forecast shapefile.
+            # This is where we get the centre line, probable path cone shape, and points in probable path.
+            five_day_latest_filename = f"https://www.nhc.noaa.gov/gis/forecast/archive/{storm_id}_5day_latest.zip"
+            
+            # Get points layer from five day forecast shapefile.
+            points = self.__get_shapefile(five_day_latest_filename, "5day_pts.shp$")
+            
+            # Start by processing the points shapefile
+            points["longitude"] = points["geometry"].x.astype(float)
+            points["latitude"] = points["geometry"].y.astype(float)
+            points = points.drop(columns=["geometry"])
+            
+            # Define necessary info for point markers.
+            points["type"] = "point"
+            
+            # String together a title from information in each row.
+            points['DATELBL'] = pd.to_datetime(points['DATELBL'])
+            # points["title"] = points['DATELBL'].dt.strftime("%A") + "<br>" + points['DATELBL'].dt.strftime("%I:%M %p").replace("<br>0", "<br>")
+            
+            # Marker symbols are the little letters in each point marker.
+            points["markerSymbol"] = points["DVLBL"]
+            
+            # Define colors based on the letters we use to mark each point.
+            points["markerColor"] = points["markerSymbol"].replace({"D": "#567282", "S": "#567282", "H": "#e06618"})
+            
+            # Define label anchors.
+            points["anchor"] = "middle-left"
+            
+            # Define a written out version of what kind of storm it is at each point for use in the tooltip.
+            points.loc[points["DVLBL"] == "D", "storm_type"] = "Depression"
+            points.loc[points["DVLBL"] == "H", "storm_type"] = "Hurricane"
+            points.loc[points["DVLBL"] == "S", "storm_type"] = "Storm"
+            
+            # This checks os, and returns a leading character to remove 0 from strftime.
+            # On windows, you have to use #. On Linux and Mac, it's a hyphen.
+            if self._os_name == "nt":
+                leading_char = "#"
+            else:
+                leading_char = "-"
+            
+            # Put together the tooltip for each map point.
+            points["tooltip"] = "On " + points['DATELBL'].dt.strftime("%b %e") + " at " + points['DATELBL'].dt.strftime("%" + leading_char + "I:%M %p").str.replace(" 0", "", regex=True) + " EST, the storm is projected to be classified as a " + points["storm_type"].str.lower() + "."
+            
+            # Get center line layer from five day forecast shapefile.
+            centre_line = self.__get_shapefile(five_day_latest_filename, "5day_lin.shp$")
+            
+            # Define properties unique to centre line.
+            
+            centre_line["stroke"] = "#000000"
+            centre_line["stroke-width"] = 2.0
+            centre_line["fill"] = False
+            centre_line["title"] = "Probable path centre line"
+            
+            # Get probable path layer from five day forecast shapefile.
+            # This layer is the cone that shows where the storm may move next.
+            probable_path = self.__get_shapefile(five_day_latest_filename, "5day_pgn.shp$")
+            
+            # Define properties unique to probable path shape.
+            probable_path["fill"] = "#6a3d99"
+            probable_path["stroke"] = False
+            probable_path["fill-opacity"] = 0.3
+            probable_path["title"] = "Probable path"
+            
+            # Call the method that returns our total path information. This holds historical info about where the hurricane has been.
+            # TODO add point information back into historical path?
+            # total_path = self.__total_path(storm_id=self.storm_id)
+            
+            # Get the best track zipfile that contains the shapefile about the historical path of the storm.
+            best_track_zip = f"https://www.nhc.noaa.gov/gis/best_track/{storm_id}_best_track.zip"
+            historical_path = self.__get_shapefile(best_track_zip, "lin.shp$")
+            
+            # Set some attributes that are required by the data() method for areas that will eventually be called on this dataset.
+            historical_path["stroke"] = "#000000"
+            historical_path["stroke-dasharray"] = "3,2.2"
+            historical_path["stroke-width"] = 2.0
+            historical_path["fill"] = False
+            
+            # Dissolve several features of this line into one long line, as the individual segments are not of interest to us.
+            historical_path = historical_path.dissolve(by='STORMNUM')
+            
+            # Concatenate all our area markers together so we can define some common characteristics.
+            shapes = pd.concat([centre_line, probable_path, historical_path])
+            
+            # Define some common style points for the centre line and the probable path.
+            shapes["icon"] = "area"
+            shapes["type"] = "area"
+            
+            # Concatenate areas and points into one large dataframe so we can upload it.
+            markers = pd.concat([shapes, points])
+            
+            markers_list.append(markers)
 
+        all_markers = pd.concat(markers_list)
         # Save as the object's dataset.
-        self.dataset = markers
+        self.dataset = all_markers
         
         # Pass the dataset we've just prepped into the super's data method.
         return super(self.__class__, self).data(self.dataset)

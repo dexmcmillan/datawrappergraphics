@@ -151,17 +151,27 @@ def test_metadata():
     
     before = chart.metadata["metadata"]["describe"]["source-name"]
     
-    logging.info(chart.metadata)
+    new_source = "".join([str(x) for x in numpy.random.randint(0, 9, 5)])
     
-    chart.metadata["metadata"]["describe"]["source-name"] = "".join([str(x) for x in numpy.random.randint(0, 9, 5)])
-    
-    chart.set_metadata()
+    chart.metadata["metadata"]["describe"]["source-name"] = new_source
     
     after = chart.metadata["metadata"]["describe"]["source-name"]
     
-    logging.info(f"Before: {before}. After: {after}")
+    chart.set_metadata()
     
-    assert before != after
+    # Same for metadata.
+    headers = {
+        "Accept": "*/*",
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {chart.DW_AUTH_TOKEN}"
+    }
+    
+    fetched = requests.get(f"https://api.datawrapper.de/v3/charts/{chart.CHART_ID}", headers=headers).json()["metadata"]["describe"]["source-name"]
+    
+    logging.info(f"Before: {before}. After: {after}. Fetched: {fetched}")
+    
+    
+    assert before != after and after == fetched
 
 
 
@@ -306,16 +316,26 @@ def test_ukraine_map():
 @pytest.mark.maps
 def test_hurricane_map():
 
-    hurricane_map = (datawrappergraphics.StormMap(chart_id=TEST_HURRICANE_MAP_ID, storm_id="EP022022", xml_url="https://www.nhc.noaa.gov/nhc_ep2.xml")
+    hurricane_map = (datawrappergraphics.StormMap(chart_id=TEST_HURRICANE_MAP_ID, storm_id=["EP022022"])
                     .data()
                     )
     
+    hurricane_map = hurricane_map.head(f"TEST: Tracking {hurricane_map.storm_type.lower()} {hurricane_map.storm_name}")
+    
+    if hurricane_map.active:
+        hurricane_map = (hurricane_map
+                        .deck(f"Windspeed is currently measured at <b>{hurricane_map.windspeed} km/h</b>.<br><br>The dotted line shows the historical path of the weather system.")
+        )
+    else:
+        hurricane_map = (hurricane_map
+                        .deck(f"This storm has passed and is no longer being tracked.")
+        )
+        
     hurricane_map = (hurricane_map
-                    .head(f"TEST: Tracking {hurricane_map.storm_type.lower()} {hurricane_map.storm_name}")
-                    .deck(f"Windspeed is currently measured at <b>{hurricane_map.windspeed} km/h</b>.<br><br>The dotted line shows the historical path of the weather system.")
                     .footer(source="U.S. National Hurricane Center")
                     .publish()
-                    .move(API_TEST_FOLDER))
+                    .move(API_TEST_FOLDER)
+                    )
     
     assert hurricane_map
 
