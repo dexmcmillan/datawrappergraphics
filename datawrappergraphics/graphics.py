@@ -54,7 +54,7 @@ class Datawrapper:
         
         self.script_name = os.path.basename(sys.argv[0]).replace(".py", "")
         
-        self.path = os.path.dirname(sys.argv[0]) 
+        self.path = os.path.dirname(sys.argv[0])
     
     
     # This method authenticates to Datawrapper and returns the token for accessing the DW api.
@@ -79,7 +79,7 @@ class Datawrapper:
             # If this is run using Github actions, it will take a secret from the repo instead.
             except FileNotFoundError:
                 try: DW_AUTH_TOKEN = os.environ['DW_AUTH_TOKEN']
-                except: raise Exception(f"No auth.txt file found, and no environment variable specified for DW_AUTH_TOKEN. Please add one of the two to authenticate to Datawrapper's API.")
+                except KeyError: raise Exception(f"No auth.txt file found, and no environment variable specified for DW_AUTH_TOKEN. Please add one of the two to authenticate to Datawrapper's API.")
         
         self.DW_AUTH_TOKEN = DW_AUTH_TOKEN    
         return self 
@@ -225,18 +225,32 @@ class Graphic(Datawrapper):
             
             logging.info(f"No chart specified. Creating new chart...")
             
+            payload = {}
+            
             # If a folder is specified in which to create the chart, handle that here.
             if folder_id:
-                payload = {"folderId": folder_id}
+                payload["folderId"] = folder_id
                 
-            # Otherwise, just send an empty payload.    
+            # Otherwise, just ignore folderId in the payload.  
             else:
                 
-                if chart_type in self.allowed_chart_types + ["locator-map"]:
-                    payload = {"type": chart_type}
+                if chart_type in self.allowed_chart_types:
+                    
+                    if self.__class__ == Map: raise Exception(f"You're trying to create a type that's not locator-map. Please try again.")
+                    
+                    payload["type"] = chart_type
+                    
+                elif (chart_type in ["locator-map"]) or self.__class__ == Map:
+                    
+                    payload["type"] = "locator-map"
+                    
                 else:
+                    
                     logging.warning(f"Invalid or no chart type specified. Creating new chart as a line chart instead.")
-                    payload = {"type": "d3-lines"}
+                    
+                    payload["type"] = "d3-lines"
+            
+            
             
             response = requests.post(f"https://api.datawrapper.de/v3/charts/", json=payload, headers=headers)
             chart_id = response.json()["publicId"]
