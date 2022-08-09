@@ -7,18 +7,14 @@ import pandas as pd
 import geopandas
 import datetime
 import logging
-import urllib.error
 import numpy as np
 import math
 from geojson import Feature
-from io import BytesIO
-from zipfile import ZipFile
-from urllib.request import urlopen
 from datawrappergraphics.icons import dw_icons
 from datawrappergraphics.errors import *
 from IPython.display import HTML
 from io import StringIO
-from shapely.geometry import shape, Point
+from shapely.geometry import Point
 
 
 class Datawrapper:
@@ -47,7 +43,6 @@ class Datawrapper:
         
         # Authenticate to datawrapper's API.
         self.auth(token=auth_token)
-        
         
         # Set OS name (see global Graphic variables)
         self._os_name = os.name
@@ -499,7 +494,7 @@ class Graphic(Datawrapper):
         day = today.strftime('%B %d, %Y')
         
         # Use day and time values and create the string we put into the footer as a timestamp.
-        timestamp_string = f"Last updated on {day} at {time}".replace(" 0", " ")
+        timestamp_string = f"Last updated on {day} at {time} ET".replace(" 0", " ")
         
         headers = {
             "Accept": "*/*",
@@ -1070,276 +1065,7 @@ class Map(Graphic):
         return markers
     
     
-
-
-
-# The StormMap class is a special extension of the Map class that takes data from the NOAA and turns
-# it into a hurricane map with standard formatting. It takes one input: the storm ID of the hurricane
-# or tropical storm that can be taken from the NOAA's National Hurricane Center.
-
-# The NOAA stores this data in at least two separate zipfiles that need to be pulled in and processed.
-class StormMap(Map):
-    
-    """A special maps class for loading in NOAA hurricane center data into a locator map.
-    
-    This class is implemented by passing both an XML url and a storm ID into the constructor.
-    
-    Args:
-        storm_id (str): The ID of the storm that you want to track.
-        active (bool): Whether or not the storm is still active.
-        chart_id (str): The ID of the chart you're bringing into the module. Providing this string value is the typical implementation of this library.
-        copy_id (str, optional): Instead of a chart_id, you can specify the id of a chart to copy. Keep in mind that this will keep making copies if you keep running code, so it's best run only once, then use chart_id.
-        auth_token (str, optional): The auth_token from Datawrapper. You can authenticate by passing this into the class instantiation, or by putting an auth.txt file in your project's root folder with the token.
-        folder_id (str, optional): If a new chart is being created because no chart_id or copy_id is passed, this is where you specify which folder to create it in.
-
-    Attributes:
-        storm_id (str): The ID of the storm in the map.
-        windspeed (str): The current windspeed.
-        storm_name (str): The name of the tracked storm.
-        storm_type (str): Is the storm currently remnants, a tropical depression, or a hurricane?
-        
-    Returns:
-        object: Returns self, the instance of the Graphic class. Can be chained with other methods.
-    """
-    
-    # Some variables that we want to be able to access when the class is instantiated.
-    global storm_id
-    global windspeed
-    global storm_name
-    global storm_type
-    global active
-    
-    
-    # TODO allow passing of just storm_id to track the storm, rather than XML_id as well.
-    def __init__(self, storm_id: str, chart_id: str = None, copy_id: str = None):
-        
-        # Set storm id from the input given to the class constructor.
-        if isinstance(storm_id, str):
-            self.storm_id = [storm_id]
-        else:
-            self.storm_id = storm_id
-        
-        super().__init__(chart_id, copy_id)
-    
-    
-    
-    # This method gets the shapefile from the NOAA, which is in a zipfile.
-    def __get_shapefile(self, filename, layer):
-        filename = filename.lower()
-        
-        # Download and open the zipfile.
-        try: resp = urlopen(filename)
-        except urllib.error.HTTPError: raise Exception(f"Resource is forbidden. It's likely the shapefile for probable path is not publicly accessible.")
-        
-        # List out names of files in the zipfile.
-        files = ZipFile(BytesIO(resp.read())).namelist()
-        
-        # Put it into a dataframe for easy iteration.
-        files = pd.Series(files)
-
-        file_name = files[files.str.contains(layer)].to_list()[0].replace(".shp", "")
-        
-        # Returns a geopandas df.
-        return geopandas.read_file(filename, layer=file_name)
-    
-    
-    
-    
-    # This function gets the total path of the hurricane, which is stored in a separate zip file entirely from the others.
-    # This function is not used currently.
-    def __total_path(self, storm_id):
-        
-        # Get the best track zipfile that contains the shapefile about the historical path of the storm.
-        best_track_zip = f"https://www.nhc.noaa.gov/gis/best_track/{storm_id}_best_track.zip"
-        
-        # Pull the points shapefile out of this zip file.
-        points = self.__get_shapefile(best_track_zip, "pts.shp$")
-
-        # points = points[points["STORMNAME"] == self.storm_name.upper()]
-        points = points.rename(columns={"LAT": "latitude", "LON": "longitude"})
-
-        # Turn the geometry column into a lat/long column.
-        # We do this because that's what Graphics's data() method uses for points (it does not recognize WKT POINT() features).
-        points["longitude"] = points["geometry"].x.astype(float)
-        points["latitude"] = points["geometry"].y.astype(float)
-        points = points.drop(columns=["geometry"])
-        
-        # Set some attributes that are required by the data() method for points that will eventually be called on this dataset.
-        points["type"] = "point"
-        points["icon"] = "circle"
-        points["scale"] = 1.1
-        
-        points["markerSymbol"] = points["STORMTYPE"].str.replace("M", "H")
-        points.loc[~points["markerSymbol"].isin(["D", "S", "H"]), "markerSymbol"] = ""
-        points["markerColor"] = points["markerSymbol"].replace({"H": "#e06618"})
-        points.loc[points["markerColor"] != "H", "markerColor"] = "#567282"
-        
-        # Pull the line shapefile out of this zip file.
-        # This is what makes the "historical path" dotted line on the Datawrapper chart.
-        line = self.__get_shapefile(best_track_zip, "lin.shp$")
-        
-        # Set some attributes that are required by the data() method for areas that will eventually be called on this dataset.
-        line["stroke"] = "#000000"
-        line["type"] = "area"
-        line["stroke-dasharray"] = "1,2.2"
-        line["fill-opacity"] = 0.0
-        
-        # line = line[line["SS"] >= 1]
-        
-        line = line.dissolve(by='STORMNUM')
-        
-        df = pd.concat([line])
-        
-        # This bit of code standardizes the storm classifcations into a style that Datawrapper can use (single letters, not two).
-        # df["STORMTYPE"] = (df["STORMTYPE"]
-        #                     .replace({"TS": "S", "HU": "H", "TD": "D"})
-        #                     .loc[df["STORMTYPE"].isin(["D", "H", "S"]), :]
-        #                     )
-        
-        return df
-    
-    # This method is a custom version of Map's data() method, which is then called after calling this.
-    def data(self):
-            
-        markers_list = []
-        
-        for storm_id in self.storm_id:
-            # Get storm metadata.
-            folder = storm_id[:-4].upper()
-            
-            # There are some issues with the folders of NOAA following naming conventions. This should fix it.
-            if folder[:2] == "AL":
-                folder = folder.replace("AL", "AT")
-            
-            filename = f"https://www.nhc.noaa.gov/storm_graphics/{folder}/atcf-{storm_id.lower()}.xml"
-            
-            try: metadata = pd.read_xml(filename, xpath="/cycloneMessage")
-            except urllib.error.HTTPError: raise NoStormDataError()
-            
-            metadata.columns = metadata.columns.str.strip()
-            # Split the marker for the center of the storm into latitude and longitude values.
-            metadata = metadata.rename(columns={"centerLocLongitude": "longitude",
-                                        "centerLocLatitude": "latitude",
-                                        "systemSpeedKph": "windspeed",
-                                        "systemName": "name",
-                                        "systemType": "type"
-                                        })
-            
-            # Save windspeed in object variables.
-            self.windspeed = metadata.at[0, "windspeed"]
-            
-            # Save name of storm in object variables.
-            self.storm_name = metadata.at[0, "name"].capitalize()
-            
-            # Save type of storm in object variables.
-            self.storm_type = metadata.at[0, "type"]
-            
-            if self.storm_type == "REMNANTS OF":
-                self.active = False
-            else:
-                self.active = True
-            
-            
-            # Pull in data from NOAA five day forecast shapefile.
-            # This is where we get the centre line, probable path cone shape, and points in probable path.
-            five_day_latest_filename = f"https://www.nhc.noaa.gov/gis/forecast/archive/{storm_id}_5day_latest.zip"
-            
-            # Get points layer from five day forecast shapefile.
-            points = self.__get_shapefile(five_day_latest_filename, "5day_pts.shp$")
-            
-            # Start by processing the points shapefile
-            points["longitude"] = points["geometry"].x.astype(float)
-            points["latitude"] = points["geometry"].y.astype(float)
-            points = points.drop(columns=["geometry"])
-            
-            # Define necessary info for point markers.
-            points["type"] = "point"
-            
-            # String together a title from information in each row.
-            points['DATELBL'] = pd.to_datetime(points['DATELBL'])
-            # points["title"] = points['DATELBL'].dt.strftime("%A") + "<br>" + points['DATELBL'].dt.strftime("%I:%M %p").replace("<br>0", "<br>")
-            
-            # Marker symbols are the little letters in each point marker.
-            points["markerSymbol"] = points["DVLBL"]
-            
-            # Define colors based on the letters we use to mark each point.
-            points["markerColor"] = points["markerSymbol"].replace({"D": "#567282", "S": "#567282", "H": "#e06618"})
-            
-            # Define label anchors.
-            points["anchor"] = "middle-left"
-            
-            # Define a written out version of what kind of storm it is at each point for use in the tooltip.
-            points.loc[points["DVLBL"] == "D", "storm_type"] = "Depression"
-            points.loc[points["DVLBL"] == "H", "storm_type"] = "Hurricane"
-            points.loc[points["DVLBL"] == "S", "storm_type"] = "Storm"
-            
-            # This checks os, and returns a leading character to remove 0 from strftime.
-            # On windows, you have to use #. On Linux and Mac, it's a hyphen.
-            if self._os_name == "nt":
-                leading_char = "#"
-            else:
-                leading_char = "-"
-            
-            # Put together the tooltip for each map point.
-            points["tooltip"] = "On " + points['DATELBL'].dt.strftime("%b %e") + " at " + points['DATELBL'].dt.strftime("%" + leading_char + "I:%M %p").str.replace(" 0", "", regex=True) + " EST, the storm is projected to be classified as a " + points["storm_type"].str.lower() + "."
-            
-            # Get center line layer from five day forecast shapefile.
-            centre_line = self.__get_shapefile(five_day_latest_filename, "5day_lin.shp$")
-            
-            # Define properties unique to centre line.
-            
-            centre_line["stroke"] = "#000000"
-            centre_line["stroke-width"] = 2.0
-            centre_line["fill"] = False
-            centre_line["title"] = "Probable path centre line"
-            
-            # Get probable path layer from five day forecast shapefile.
-            # This layer is the cone that shows where the storm may move next.
-            probable_path = self.__get_shapefile(five_day_latest_filename, "5day_pgn.shp$")
-            
-            # Define properties unique to probable path shape.
-            probable_path["fill"] = "#6a3d99"
-            probable_path["stroke"] = False
-            probable_path["fill-opacity"] = 0.3
-            probable_path["title"] = "Probable path"
-            
-            # Call the method that returns our total path information. This holds historical info about where the hurricane has been.
-            # TODO add point information back into historical path?
-            # total_path = self.__total_path(storm_id=self.storm_id)
-            
-            # Get the best track zipfile that contains the shapefile about the historical path of the storm.
-            best_track_zip = f"https://www.nhc.noaa.gov/gis/best_track/{storm_id}_best_track.zip"
-            historical_path = self.__get_shapefile(best_track_zip, "lin.shp$")
-            
-            # Set some attributes that are required by the data() method for areas that will eventually be called on this dataset.
-            historical_path["stroke"] = "#000000"
-            historical_path["stroke-dasharray"] = "3,2.2"
-            historical_path["stroke-width"] = 2.0
-            historical_path["fill"] = False
-            
-            # Dissolve several features of this line into one long line, as the individual segments are not of interest to us.
-            historical_path = historical_path.dissolve(by='STORMNUM')
-            
-            # Concatenate all our area markers together so we can define some common characteristics.
-            shapes = pd.concat([centre_line, probable_path, historical_path])
-            
-            # Define some common style points for the centre line and the probable path.
-            shapes["icon"] = "area"
-            shapes["type"] = "area"
-            
-            # Concatenate areas and points into one large dataframe so we can upload it.
-            markers = pd.concat([shapes, points])
-            
-            markers_list.append(markers)
-
-        all_markers = pd.concat(markers_list)
-        # Save as the object's dataset.
-        self.dataset = all_markers
-        
-        # Pass the dataset we've just prepped into the super's data method.
-        return super(self.__class__, self).data(self.dataset)
-    
-    
+ 
 class FibonacciChart(Chart):
     
     """A custom chart type that creates a fibonacci spiral with your data.
@@ -1460,7 +1186,7 @@ class CalendarChart(Chart):
         
 
     
-    def data(self, input_data: pd.DataFrame, date_col: str, timeframe: str = "month"):
+    def data(self, input_data: pd.DataFrame, date_col: str, timeframe: str = "month", density: int = "15"):
         
         # Convert the specified date column into pd.datetime.
         try: input_data[date_col] = pd.to_datetime(input_data[date_col])
@@ -1488,8 +1214,6 @@ class CalendarChart(Chart):
         
         # This will output a calendar on a year scale, rather than a month scale.
         if timeframe == "year":
-            
-            density = 15
             
             input_data["x"] = input_data[date_col].dt.dayofyear
             

@@ -10,6 +10,7 @@ import requests
 import json
 import logging
 import pytest
+from disasters import *
 
 
 TEST_MAP_ID = "rCSft"
@@ -48,7 +49,7 @@ def test_calendar_chart():
                    )
     
     year_chart = (datawrappergraphics.CalendarChart(TEST_CALENDAR_YEAR_CHART)
-                  .data(test_calendar_year_chart_data, date_col="date", timeframe="year")
+                  .data(test_calendar_year_chart_data, date_col="date", timeframe="year", density=20)
                   .head(f"TEST: Calendar (year) chart test graphic")
                   .publish()
                   )
@@ -315,16 +316,21 @@ def test_ukraine_map():
 # A note that this test will work only until the storm ID is relevant. The data disappears once the storm has passed.
 @pytest.mark.maps
 def test_hurricane_map():
+    
+    hurricane1 = Hurricane("EP012022")
+    hurricane2 = Hurricane("EP022022")
+    
+    hurricanes = pd.concat([hurricane1.data, hurricane2.data])
 
-    hurricane_map = (datawrappergraphics.StormMap(chart_id=TEST_HURRICANE_MAP_ID, storm_id=["EP022022"])
-                    .data()
+    hurricane_map = (datawrappergraphics.Map(chart_id=TEST_HURRICANE_MAP_ID)
+                    .data(hurricanes)
                     )
     
-    hurricane_map = hurricane_map.head(f"TEST: Tracking {hurricane_map.storm_type.lower()} {hurricane_map.storm_name}")
+    hurricane_map = hurricane_map.head(f"TEST: Tracking {hurricane1.storm_type.lower()} {hurricane1.name}")
     
-    if hurricane_map.active:
+    if hurricane1.active:
         hurricane_map = (hurricane_map
-                        .deck(f"Windspeed is currently measured at <b>{hurricane_map.windspeed} km/h</b>.<br><br>The dotted line shows the historical path of the weather system.")
+                        .deck(f"Windspeed is currently measured at <b>{hurricane1.windspeed} km/h</b>.<br><br>The dotted line shows the historical path of the weather system.")
         )
     else:
         hurricane_map = (hurricane_map
