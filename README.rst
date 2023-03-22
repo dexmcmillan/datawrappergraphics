@@ -43,7 +43,7 @@ Classes can be implemented by using:
 
         chart_id = "AbBe1"
 
-        map = (Map()
+        map = (Map(chart_id)
                 .data(aPandasDataframe)
                 .head("A cool headline for your chart")
                 .deck("A great looking deck, or subheadline, for your chart".)
