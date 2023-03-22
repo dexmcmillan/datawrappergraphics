@@ -15,6 +15,7 @@ from datawrappergraphics.errors import *
 from IPython.display import HTML
 from io import StringIO
 from shapely.geometry import Point
+from pytz import timezone
 
 
 class Datawrapper:
@@ -319,7 +320,10 @@ class Graphic(Datawrapper):
             HTML: Returns HTML that can be loaded in Jupyter notebook output.
         """
         
-        iframe_code = self.metadata["metadata"]["publish"]["embed-codes"]["embed-method-iframe"]
+        try:
+            iframe_code = self.metadata["metadata"]["publish"]["embed-codes"]["embed-method-iframe"]
+        except KeyError:
+            raise NotPublishedError("No embed code found to display. Did you forget to publish your chart first?")
         
         return HTML(iframe_code)
     
@@ -455,7 +459,7 @@ class Graphic(Datawrapper):
         if r.ok: logging.info(f"SUCCESS: Chart deck added.")
         else: raise Exception(f"ERROR: Chart deck was not added. Response: {r.text}")
         
-        # Update the object's metadat representation.
+        # Update the object's metadata representation.
         self.metadata = r.json()
         
         return self
@@ -470,7 +474,7 @@ class Graphic(Datawrapper):
     
     ## Adds a timestamp to the "notes" section of your chart. Also allows for an additional note string that will be added before the timestamp.
     
-    def footer(self, source: str = None, byline:str = "Dexter McMillan", note: str = "", timestamp: bool = True):
+    def footer(self, source: str = None, byline:str = "Dexter McMillan", note: str = "", timestamp: bool = True, alt: str = "", tz: str ="America/Toronto", cbcstyle: bool = True):
         
         """Updates the footer info of your graphic.
 
@@ -479,22 +483,39 @@ class Graphic(Datawrapper):
             byline (str): The graphic's byline.
             note (str): The graphic's note (showing at the bottom of the graphic).
             timestamp (bool): Whether a timestamp should be included or not. Timestamps are added right after whatever you specify as the note.
-
+            alt (str): Alt text for screen readers that should be included in the graphic.
+            tz (str): A string with a pytz timezone. You can find a complete list here: https://gist.github.com/heyalexej/8bf688fd67d7199be4a1682b3eec7568
+            cbcstyle (bool): Does this chart need to show timezones in CBC style? If so, set this to True. Default is True.
+            
         Returns:
             object: Returns self, the instance of the Graphics class. Can be chained with other methods.
         """
         
-        today = datetime.datetime.today()
+        today = datetime.datetime.now(timezone(tz))
         
-        if self._os_name == "posix":
-            today = today - datetime.timedelta(hours=4)
-        
+        # if self._os_name == "posix":
+        #     today = today - datetime.timedelta(hours=4)
+            
         # Get day and time strings for use in the footer timestamp.
+        zone = today.strftime('%Z').replace("Eastern Summer Time", "EST").replace("Eastern Standard Time", "EST")
+        
+        if cbcstyle and len(zone) == 3: zone = zone[0] + zone[-1]
+        
         time = today.strftime('%I:%M') + " " + ".".join(list(today.strftime('%p'))).lower() + "."
-        day = today.strftime('%B %d, %Y')
+        
+        # Replace some months. This is mostly to conform with CBC style for month abbreviations.
+        day = (today.strftime('%B %d, %Y')
+               .replace("January", "Jan.")
+               .replace("February", "Feb.")
+               .replace("August", "Aug.")
+               .replace("September", "Sept.")
+               .replace("October", "Oct.")
+               .replace("November", "Nov.")
+               .replace("December", "Dec.")
+               )
         
         # Use day and time values and create the string we put into the footer as a timestamp.
-        timestamp_string = f"Last updated on {day} at {time} ET".replace(" 0", " ")
+        timestamp_string = f"Last updated on {day} at {time} {zone}.".replace(" 0", " ")
         
         headers = {
             "Accept": "*/*",
@@ -508,6 +529,7 @@ class Graphic(Datawrapper):
                 "describe": {
                     "source-name": source,
                     "byline": byline,
+                    "aria-description": alt,
                 },
                 "annotate": {
                     "notes": f"{note} {timestamp_string if timestamp else ''}".strip(),

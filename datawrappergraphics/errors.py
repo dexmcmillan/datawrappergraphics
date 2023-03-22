@@ -50,6 +50,13 @@ class MissingDataError(Exception):
         super().__init__(msg)
         
         
+class NotPublishedError(Exception):
+        
+    def __init__(self, msg: str):
+        
+        super().__init__(msg)
+        
+        
 class GeometryError(Exception):
         
     def __init__(self, msg: str = None):
@@ -61,6 +68,12 @@ class GeometryError(Exception):
         
         
 class DatawrapperAPIError(Exception):
+        
+    def __init__(self, msg: str = None):
+        
+        super().__init__(msg)
+        
+class TimezoneError(Exception):
         
     def __init__(self, msg: str = None):
         

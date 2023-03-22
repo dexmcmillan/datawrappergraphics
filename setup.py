@@ -7,7 +7,7 @@ long_description = (this_directory / "README.rst").read_text()
 setup(
     name='datawrappergraphics',
     packages=find_packages(include=["datawrappergraphics"]),
-    version='0.3.34',
+    version='0.3.37',
     url='https://github.com/dexmcmillan/datawrappergraphics',
     description='A package for interacting with Datawrapper maps, charts, and folders.',
     long_description=long_description,
